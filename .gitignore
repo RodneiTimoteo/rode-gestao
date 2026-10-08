@@ -40,3 +40,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Configurações locais e credenciais
+.env.local
+.env.*.local
+
+
+# Bootstrap específico de cada ambiente
+/supabase/bootstrap/bootstrap_rode_principal.sql
+/supabase/bootstrap/bootstrap_rode_teste.sql

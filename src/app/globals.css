@@ -70,7 +70,7 @@ body {
 }
 
 button, a { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 ::selection { background: #cae7d5; color: #123c2b; }
 
 @media (prefers-reduced-motion: reduce) {

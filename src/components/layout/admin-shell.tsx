@@ -30,7 +30,7 @@ export function AdminShell({ children, user }: { children: React.ReactNode; user
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const currentPage = allNavigation.find((item) => pathname === item.href)?.label ?? "RODE Gestão";
+  const currentPage = allNavigation.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label ?? "RODE Gestão";
 
   return <div className="min-h-screen bg-canvas">
     <a href="#conteudo-principal" className="fixed left-3 top-3 z-[70] -translate-y-20 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white focus:translate-y-0">Pular para o conteúdo</a>

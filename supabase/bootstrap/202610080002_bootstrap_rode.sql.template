@@ -1,0 +1,106 @@
+-- VERSÃO REVISADA: revisar o UUID sentinela antes da execução.
+-- TEMPLATE INTENCIONAL: este arquivo não é executado automaticamente pelo Supabase CLI.
+--
+-- 1. Substitua o UUID sentinela abaixo pelo UUID de um usuário já existente em
+--    Authentication > Users.
+-- 2. Revise os dados cadastrais da organização.
+-- 3. Copie o arquivo para:
+--    supabase/migrations/<novo_timestamp>_bootstrap_rode.sql
+-- 4. Aplique a cópia como uma migration normal.
+--
+-- Não registre e-mail, senha, access token, service_role ou secret key neste arquivo.
+
+begin;
+
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
+
+do $bootstrap$
+declare
+  bootstrap_owner_id constant uuid := '00000000-0000-0000-0000-000000000000';
+  rode_organization_id uuid;
+begin
+  if bootstrap_owner_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception 'Substitua bootstrap_owner_id pelo UUID explícito de um usuário Auth existente.';
+  end if;
+
+  if not exists (
+    select 1
+    from auth.users
+    where id = bootstrap_owner_id
+  ) then
+    raise exception 'O usuário Auth % não existe.', bootstrap_owner_id;
+  end if;
+
+  select organization.id
+    into rode_organization_id
+  from public.organizations organization
+  where lower(organization.slug) = 'rode'
+  for update;
+
+  -- Nunca se apropriar automaticamente de uma organização existente.
+  if rode_organization_id is not null and not exists (
+    select 1 from public.organization_members membership
+    where membership.organization_id = rode_organization_id
+      and membership.user_id = bootstrap_owner_id
+      and membership.role = 'owner'
+      and membership.status = 'active'
+  ) then
+    raise exception 'O slug rode já existe e não pertence ao owner informado; revise manualmente.';
+  end if;
+
+  if rode_organization_id is null then
+    insert into public.organizations (name, legal_name, slug, status)
+    values ('RODE Soluções Inteligentes', 'RODE Soluções Inteligentes', 'rode', 'active')
+    returning id into rode_organization_id;
+  end if;
+
+  insert into public.profiles (id)
+  values (bootstrap_owner_id)
+  on conflict (id) do nothing;
+
+  insert into public.organization_members (
+    organization_id,
+    user_id,
+    role,
+    status,
+    created_by,
+    joined_at
+  )
+  values (
+    rode_organization_id,
+    bootstrap_owner_id,
+    'owner',
+    'active',
+    bootstrap_owner_id,
+    now()
+  )
+  on conflict (organization_id, user_id) do update
+    set role = 'owner',
+        status = 'active',
+        joined_at = coalesce(public.organization_members.joined_at, now());
+
+  insert into public.pipeline_stages (
+    organization_id,
+    key,
+    name,
+    position,
+    outcome,
+    is_active
+  )
+  values
+    (rode_organization_id, 'new_lead', 'Novo lead', 10, 'open', true),
+    (rode_organization_id, 'qualification', 'Qualificação', 20, 'open', true),
+    (rode_organization_id, 'proposal', 'Proposta enviada', 30, 'open', true),
+    (rode_organization_id, 'negotiation', 'Negociação', 40, 'open', true),
+    (rode_organization_id, 'won', 'Ganho', 50, 'won', true),
+    (rode_organization_id, 'lost', 'Perdido', 60, 'lost', true)
+  on conflict (organization_id, key) do update
+    set name = excluded.name,
+        position = excluded.position,
+        outcome = excluded.outcome,
+        is_active = excluded.is_active;
+end;
+$bootstrap$;
+
+commit;
