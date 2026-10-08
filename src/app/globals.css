@@ -1,26 +1,83 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --canvas: #f6f7f8;
+  --surface: #ffffff;
+  --soft: #f1f4f2;
+  --strong: #17211c;
+  --muted: #66736c;
+  --subtle: #89928d;
+  --line: #e3e7e5;
+  --brand: #1f6b49;
+  --brand-strong: #18573c;
+  --brand-soft: #eaf4ee;
+  --positive: #287650;
+  --positive-soft: #ecf7f0;
+  --danger: #ad4b3d;
+  --danger-soft: #fff0ed;
+  --warning: #9b6a25;
+  --warning-soft: #fff7e8;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-soft: var(--soft);
+  --color-strong: var(--strong);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #101512;
+  --surface: #171e1a;
+  --soft: #202923;
+  --strong: #f1f5f2;
+  --muted: #a7b2ab;
+  --subtle: #7e8b83;
+  --line: #2c3630;
+  --brand: #64b083;
+  --brand-strong: #76c392;
+  --brand-soft: #1d3528;
+  --positive: #72bd8f;
+  --positive-soft: #193326;
+  --danger: #ef9a8e;
+  --danger-soft: #3a211f;
+  --warning: #e0b571;
+  --warning-soft: #352a19;
 }
 
+* { box-sizing: border-box; }
+html { background: var(--canvas); }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--strong);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  margin: 0;
+}
+
+button, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+::selection { background: #cae7d5; color: #123c2b; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

@@ -1,0 +1,7 @@
+import { Icon } from "@/components/ui/icon";
+import { tasks } from "@/features/dashboard/data/mock-data";
+
+const priorityStyles = { Alta: "bg-danger-soft text-danger", Média: "bg-warning-soft text-warning", Baixa: "bg-soft text-muted" };
+export function TasksList() {
+  return <article className="overflow-hidden rounded-2xl border border-line bg-surface"><div className="flex items-center justify-between border-b border-line px-5 py-4 sm:px-6"><div><h2 className="text-sm font-semibold text-strong">Tarefas prioritárias</h2><p className="mt-1 text-xs text-subtle">Próximas entregas da equipe</p></div><span className="rounded-full bg-soft px-2.5 py-1 text-[11px] font-medium text-muted">{tasks.length} tarefas</span></div><ul>{tasks.map((task, index) => <li key={task.title} className={`flex items-start gap-3 px-5 py-4 sm:px-6 ${index < tasks.length - 1 ? "border-b border-line" : ""}`}><span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border border-line text-transparent"><Icon name="check" className="size-3" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-strong">{task.title}</p><p className="mt-1 truncate text-xs text-subtle">{task.project}</p></div><div className="text-right"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${priorityStyles[task.priority]}`}>{task.priority}</span><p className="mt-2 flex items-center justify-end gap-1 text-[10px] text-subtle"><Icon name="clock" className="size-3" />{task.due}</p></div></li>)}</ul></article>;
+}
