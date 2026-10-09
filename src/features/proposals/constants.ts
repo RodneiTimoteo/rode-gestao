@@ -25,6 +25,7 @@ export const proposalEventLabels: Record<string, string> = {
   expired: "Proposta expirada",
   attachment_added: "Documento anexado",
   attachment_replaced: "Nova versão anexada",
+  option_selected: "Opção comercial selecionada",
+  option_selection_changed: "Opção comercial alterada",
   note: "Observação adicionada",
 };
-

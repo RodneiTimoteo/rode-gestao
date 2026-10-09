@@ -51,14 +51,31 @@ insert into public.proposal_items (
   id, organization_id, proposal_id, service_id, position,
   service_name_snapshot, description, quantity, unit_price, discount_amount, created_by
 )
-values (
-  '61000000-0000-4000-8000-000000000001',
-  '21000000-0000-4000-8000-000000000001',
-  '51000000-0000-4000-8000-000000000001',
-  '41000000-0000-4000-8000-000000000001',
-  1, 'Serviço A', 'Snapshot negociado', 2, 750, 100,
-  '11000000-0000-4000-8000-000000000001'
-);
+values
+  (
+    '61000000-0000-4000-8000-000000000001',
+    '21000000-0000-4000-8000-000000000001',
+    '51000000-0000-4000-8000-000000000001',
+    '41000000-0000-4000-8000-000000000001',
+    1, 'Serviço A', 'Snapshot negociado', 2, 750, 100,
+    '11000000-0000-4000-8000-000000000001'
+  ),
+  (
+    '61000000-0000-4000-8000-000000000002',
+    '21000000-0000-4000-8000-000000000001',
+    '51000000-0000-4000-8000-000000000002',
+    '41000000-0000-4000-8000-000000000001',
+    1, 'Serviço A', 'Item mínimo da proposta A2', 1, 0, 0,
+    '11000000-0000-4000-8000-000000000001'
+  ),
+  (
+    '61000000-0000-4000-8000-000000000003',
+    '21000000-0000-4000-8000-000000000002',
+    '51000000-0000-4000-8000-000000000003',
+    '41000000-0000-4000-8000-000000000002',
+    1, 'Serviço B', 'Item mínimo da proposta B1', 1, 0, 0,
+    '11000000-0000-4000-8000-000000000004'
+  );
 
 insert into public.proposal_attachments (
   id, organization_id, proposal_id, original_file_name, storage_object_path,
@@ -139,7 +156,14 @@ select throws_ok(
   '42501', null, 'member não administra catálogo de serviços'
 );
 select lives_ok(
-  $$ insert into public.proposals (organization_id, client_id, title) values ('21000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001', 'Proposta do member') $$,
+  $$
+    select public.save_proposal_draft(
+      '21000000-0000-4000-8000-000000000001', null,
+      '31000000-0000-4000-8000-000000000001', null,
+      'Proposta do member', null, null, null, null, null,
+      '[{"service_id":null,"service_name":"Item do member","description":"Item válido","quantity":1,"unit_price":10,"discount_amount":0}]'::jsonb
+    )
+  $$,
   'member ativo cria proposta na própria organização'
 );
 select throws_ok(
@@ -204,17 +228,12 @@ select throws_ok(
       'Item tardio', 'Não permitido', 1, 10
     )
   $$,
-  '42501', null, 'itens não são inseridos após aprovação'
+  'P0001', 'proposal items can only be changed in draft proposals',
+  'itens não são inseridos após aprovação'
 );
 select lives_ok(
   $$
-    insert into public.proposals (organization_id, client_id, supersedes_proposal_id, title)
-    values (
-      '21000000-0000-4000-8000-000000000001',
-      '31000000-0000-4000-8000-000000000001',
-      '51000000-0000-4000-8000-000000000001',
-      'Revisão da proposta A1'
-    )
+    select public.create_proposal_revision('51000000-0000-4000-8000-000000000001')
   $$,
   'proposta terminal pode originar nova revisão sem sobrescrita'
 );
@@ -341,6 +360,7 @@ select is((select count(*)::bigint from storage.objects where bucket_id = 'propo
 
 reset role;
 
+set constraints all immediate;
 select * from finish();
 
 rollback;

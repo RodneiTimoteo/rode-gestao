@@ -1,6 +1,7 @@
 import type { ActionState, OpportunityRecord, OrganizationRole } from "@/features/crm/types";
 
 export type ProposalStatus = "draft" | "sent" | "negotiating" | "approved" | "rejected" | "expired" | "cancelled";
+export type ProposalFormat = "simple" | "options";
 
 export type ProposalRecord = {
   id: string;
@@ -13,6 +14,8 @@ export type ProposalRecord = {
   revision_number: number;
   supersedes_proposal_id: string | null;
   title: string;
+  proposal_format: ProposalFormat;
+  selected_option_id: string | null;
   status: ProposalStatus;
   valid_until: string | null;
   payment_terms: string | null;
@@ -20,9 +23,9 @@ export type ProposalRecord = {
   notes: string | null;
   commercial_terms: string | null;
   rejection_reason: string | null;
-  subtotal_amount: number | string;
-  discount_amount: number | string;
-  total_amount: number | string;
+  subtotal_amount: number | string | null;
+  discount_amount: number | string | null;
+  total_amount: number | string | null;
   sent_at: string | null;
   approved_at: string | null;
   approved_by: string | null;
@@ -36,6 +39,7 @@ export type ProposalRecord = {
 export type ProposalItem = {
   id: string;
   proposal_id: string;
+  option_id: string | null;
   service_id: string | null;
   position: number;
   service_name_snapshot: string;
@@ -45,6 +49,23 @@ export type ProposalItem = {
   discount_amount: number | string;
   line_total: number | string;
 };
+
+export type ProposalOptionRecord = {
+  id: string;
+  organization_id: string;
+  proposal_id: string;
+  name: string;
+  description: string | null;
+  position: number;
+  subtotal_amount: number | string;
+  discount_amount: number | string;
+  total_amount: number | string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProposalOptionView = ProposalOptionRecord & { items: ProposalItem[] };
 
 export type ProposalAttachment = {
   id: string;
@@ -76,6 +97,7 @@ export type ProposalDetails = ProposalRecord & {
   clientName: string;
   opportunity: Pick<OpportunityRecord, "id" | "title"> | null;
   items: ProposalItem[];
+  options: ProposalOptionView[];
   attachments: ProposalAttachment[];
   events: ProposalEvent[];
 };
@@ -104,6 +126,25 @@ export type ProposalFormItem = {
   discount_amount: number;
 };
 
+export type ProposalOptionInput = {
+  id?: string;
+  name: string;
+  description: string | null;
+  items: ProposalFormItem[];
+};
+
+export type ProposalOptionsInput = Omit<ProposalInput, "items"> & {
+  proposal_format: "options";
+  common_items: ProposalFormItem[];
+  options: ProposalOptionInput[];
+};
+
+export type ProposalOptionValueSummary = {
+  minimum: number;
+  maximum: number;
+  selected: number | null;
+};
+
 export type ProposalInput = {
   client_id: string;
   opportunity_id: string | null;
@@ -118,4 +159,3 @@ export type ProposalInput = {
 
 export type ProposalActionState = ActionState & { proposalId?: string };
 export type ProposalPermission = { role: OrganizationRole; canApprove: boolean };
-

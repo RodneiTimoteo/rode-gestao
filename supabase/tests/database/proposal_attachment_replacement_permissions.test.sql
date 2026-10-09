@@ -16,6 +16,16 @@ insert into public.clients (id,organization_id,name,created_by) values
 ('36000000-0000-4000-8000-000000000001','26000000-0000-4000-8000-000000000001','Cliente','16000000-0000-4000-8000-000000000001');
 insert into public.proposals (id,organization_id,client_id,title,created_by) values
 ('56000000-0000-4000-8000-000000000001','26000000-0000-4000-8000-000000000001','36000000-0000-4000-8000-000000000001','Proposta','16000000-0000-4000-8000-000000000001');
+insert into public.proposal_items (
+  id, organization_id, proposal_id, position, service_name_snapshot,
+  description, quantity, unit_price, discount_amount, created_by
+) values (
+  '65000000-0000-4000-8000-000000000001',
+  '26000000-0000-4000-8000-000000000001',
+  '56000000-0000-4000-8000-000000000001', 1,
+  'Item da proposta', 'Mantém a fixture estruturalmente válida', 1, 10, 0,
+  '16000000-0000-4000-8000-000000000001'
+);
 insert into public.proposal_attachments (id,organization_id,proposal_id,original_file_name,storage_object_path,mime_type,size_bytes,uploaded_by) values
 ('66000000-0000-4000-8000-000000000001','26000000-0000-4000-8000-000000000001','56000000-0000-4000-8000-000000000001','owner.pdf','26000000-0000-4000-8000-000000000001/56000000-0000-4000-8000-000000000001/66000000-0000-4000-8000-000000000001/owner.pdf','application/pdf',100,'16000000-0000-4000-8000-000000000001'),
 ('66000000-0000-4000-8000-000000000002','26000000-0000-4000-8000-000000000001','56000000-0000-4000-8000-000000000001','member.pdf','26000000-0000-4000-8000-000000000001/56000000-0000-4000-8000-000000000001/66000000-0000-4000-8000-000000000002/member.pdf','application/pdf',100,'16000000-0000-4000-8000-000000000002');
@@ -45,5 +55,6 @@ select lives_ok($$
 $$,'owner substitui anexo de member');
 select is((select version from public.proposal_attachments where id='66000000-0000-4000-8000-000000000005'),3,'substituição administrativa mantém a sequência');
 select is((select logical_file_id from public.proposal_attachments where id='66000000-0000-4000-8000-000000000005'),(select logical_file_id from public.proposal_attachments where id='66000000-0000-4000-8000-000000000002'),'substituição preserva o arquivo lógico');
+set constraints all immediate;
 select * from finish();
 rollback;

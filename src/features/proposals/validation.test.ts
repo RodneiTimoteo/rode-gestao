@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateProposalLineTotal, calculateProposalPreview } from "./calculations.ts";
-import { canReplaceAttachment, canTransitionProposal, parseProposalInput, validatePdfFile } from "./validation.ts";
+import { calculateProposalLineTotal, calculateProposalOptionPreviews, calculateProposalPreview, summarizeProposalOptionValues } from "./calculations.ts";
+import { canReplaceAttachment, canTransitionProposal, parseProposalInput, parseProposalOptionsInput, validatePdfFile } from "./validation.ts";
 
 function validForm() {
   const form = new FormData();
   form.set("client_id", "31000000-0000-4000-8000-000000000001");
   form.set("title", "Proposta de consultoria");
   form.set("items", JSON.stringify([{ service_id: null, service_name: "Consultoria", description: "Execução", quantity: 2, unit_price: 500, discount_amount: 100 }]));
+  return form;
+}
+
+function validOptionsForm(optionCount = 2) {
+  const form = new FormData();
+  form.set("client_id", "31000000-0000-4000-8000-000000000001");
+  form.set("title", "Proposta por alternativas");
+  form.set("common_items", JSON.stringify([{ service_name: "Implantação", description: "Comum", quantity: 1, unit_price: 100, discount_amount: 10 }]));
+  form.set("options", JSON.stringify(Array.from({ length: optionCount }, (_, index) => ({
+    name: `Opção ${index + 1}`,
+    description: null,
+    items: [{ service_name: `Item ${index + 1}`, description: "Exclusivo", quantity: 2, unit_price: (index + 1) * 50, discount_amount: index * 5 }],
+  }))));
   return form;
 }
 
@@ -52,6 +65,59 @@ test("valida desconto contra o valor bruto arredondado pelo banco", () => {
   const rejected = validForm();
   rejected.set("items", JSON.stringify([{ service_name: "X", description: "Y", quantity: 0.333, unit_price: 0.05, discount_amount: 0.03 }]));
   assert.equal(parseProposalInput(rejected).success, false);
+});
+
+test("aceita duas ou três opções e separa itens comuns dos exclusivos", () => {
+  for (const count of [2, 3]) {
+    const result = parseProposalOptionsInput(validOptionsForm(count));
+    assert.equal(result.success, true);
+    if (result.success) {
+      assert.equal(result.data.proposal_format, "options");
+      assert.equal(result.data.common_items.length, 1);
+      assert.equal(result.data.options.length, count);
+      assert.equal(result.data.options[0]?.items.length, 1);
+    }
+  }
+});
+
+test("rejeita uma ou quatro opções e nomes repetidos", () => {
+  assert.equal(parseProposalOptionsInput(validOptionsForm(1)).success, false);
+  assert.equal(parseProposalOptionsInput(validOptionsForm(4)).success, false);
+  const duplicate = validOptionsForm();
+  duplicate.set("options", JSON.stringify([
+    { name: "Completa", items: [{ service_name: "A", description: "A", quantity: 1, unit_price: 10 }] },
+    { name: "completa", items: [{ service_name: "B", description: "B", quantity: 1, unit_price: 20 }] },
+  ]));
+  assert.equal(parseProposalOptionsInput(duplicate).success, false);
+});
+
+test("calcula cada alternativa com os itens comuns sem somar opções", () => {
+  const result = parseProposalOptionsInput(validOptionsForm());
+  assert.equal(result.success, true);
+  if (!result.success) return;
+  const previews = calculateProposalOptionPreviews(result.data.common_items, result.data.options);
+  assert.deepEqual(previews, [
+    { name: "Opção 1", position: 1, subtotal: 200, discount: 10, total: 190 },
+    { name: "Opção 2", position: 2, subtotal: 300, discount: 15, total: 285 },
+  ]);
+  assert.deepEqual(summarizeProposalOptionValues(previews.map((option) => option.total)), { minimum: 190, maximum: 285, selected: null });
+  assert.deepEqual(summarizeProposalOptionValues(previews.map((option) => option.total), previews[1].total), { minimum: 190, maximum: 285, selected: 285 });
+});
+
+test("opções seguem limites, descontos e arredondamento dos itens simples", () => {
+  const form = validOptionsForm();
+  form.set("options", JSON.stringify([
+    { name: "Fracionada", items: [{ service_name: "A", description: "A", quantity: 0.333, unit_price: 0.05, discount_amount: 0.02 }] },
+    { name: "Inválida", items: [{ service_name: "B", description: "B", quantity: 1, unit_price: 10, discount_amount: 11 }] },
+  ]));
+  assert.equal(parseProposalOptionsInput(form).success, false);
+  form.set("options", JSON.stringify([
+    { name: "Fracionada", items: [{ service_name: "A", description: "A", quantity: 0.333, unit_price: 0.05, discount_amount: 0.02 }] },
+    { name: "Válida", items: [{ service_name: "B", description: "B", quantity: 1.23456, unit_price: 10.005, discount_amount: 0.004 }] },
+  ]));
+  const valid = parseProposalOptionsInput(form);
+  assert.equal(valid.success, true);
+  if (valid.success) assert.deepEqual(valid.data.options[1]?.items[0], { service_id: null, service_name: "B", description: "B", quantity: 1.235, unit_price: 10.01, discount_amount: 0 });
 });
 
 test("rejeita data impossível e valores acima da precisão do banco", () => {

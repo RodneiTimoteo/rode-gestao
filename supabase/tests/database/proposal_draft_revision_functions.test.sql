@@ -30,6 +30,16 @@ insert into public.services (id,organization_id,name,description,reference_price
 ('42000000-0000-4000-8000-000000000002','22000000-0000-4000-8000-000000000002','Serviço Functions B','Descrição B',900,'12000000-0000-4000-8000-000000000003');
 insert into public.proposals (id,organization_id,client_id,opportunity_id,title,created_by) values
 ('52000000-0000-4000-8000-000000000002','22000000-0000-4000-8000-000000000002','32000000-0000-4000-8000-000000000002','44000000-0000-4000-8000-000000000002','Proposta isolada B','12000000-0000-4000-8000-000000000003');
+insert into public.proposal_items (
+  id, organization_id, proposal_id, position, service_name_snapshot,
+  description, quantity, unit_price, discount_amount, created_by
+) values (
+  '62000000-0000-4000-8000-000000000002',
+  '22000000-0000-4000-8000-000000000002',
+  '52000000-0000-4000-8000-000000000002', 1,
+  'Item isolado B', 'Mantém a fixture estruturalmente válida', 1, 10, 0,
+  '12000000-0000-4000-8000-000000000003'
+);
 
 select ok(has_function_privilege('authenticated','public.save_proposal_draft(uuid,uuid,uuid,uuid,text,date,text,text,text,text,jsonb)','execute'),'authenticated executa save_proposal_draft');
 select ok(has_function_privilege('authenticated','public.create_proposal_revision(uuid)','execute'),'authenticated executa create_proposal_revision');
@@ -71,7 +81,7 @@ $$,'23503',null,'falha em item reverte também proposta nova');
 select is((select count(*)::bigint from public.proposals where organization_id='22000000-0000-4000-8000-000000000001'),1::bigint,'falha não deixa cabeçalho órfão');
 select throws_ok($$
  select public.save_proposal_draft('22000000-0000-4000-8000-000000000001',(select id from test_ids where key='proposal'),'32000000-0000-4000-8000-000000000002',null,'Cliente alterado',null,null,null,null,null,'[{"service_id":null,"service_name":"Item","description":"Item","quantity":1,"unit_price":1,"discount_amount":0}]'::jsonb)
-$$,'P0001','draft proposal not found or access denied','edição não troca o cliente imutável');
+$$,'P0001','simple draft proposal not found or access denied','edição não troca o cliente imutável');
 select is((select client_id from public.proposals where id=(select id from test_ids where key='proposal')),'32000000-0000-4000-8000-000000000001'::uuid,'cliente original permanece íntegro');
 select throws_ok($$
  select public.save_proposal_draft('22000000-0000-4000-8000-000000000002',null,'32000000-0000-4000-8000-000000000002',null,'Tentativa cruzada',null,null,null,null,null,'[{"service_id":"42000000-0000-4000-8000-000000000002","service_name":"Serviço B","description":"Inválido","quantity":1,"unit_price":1,"discount_amount":0}]'::jsonb)
@@ -115,5 +125,6 @@ select set_config('request.jwt.claims','{"sub":"12000000-0000-4000-8000-00000000
 select throws_ok($$select public.create_proposal_revision('52000000-0000-4000-8000-000000000002')$$,'P0001','terminal proposal not found or access denied','member não cria revisão em outra organização');
 reset role;
 select is((select count(*)::bigint from public.proposals where organization_id='22000000-0000-4000-8000-000000000002'),1::bigint,'tentativas cruzadas não criam dados na organização B');
+set constraints all immediate;
 select * from finish();
 rollback;

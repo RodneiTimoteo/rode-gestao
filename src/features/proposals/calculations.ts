@@ -1,4 +1,4 @@
-import type { ProposalFormItem } from "@/features/proposals/types";
+import type { ProposalFormItem, ProposalOptionInput, ProposalOptionValueSummary } from "@/features/proposals/types";
 
 export function roundProposalNumber(value: number, decimalPlaces: number) {
   if (!Number.isFinite(value)) return value;
@@ -39,5 +39,25 @@ export function calculateProposalPreview(items: ProposalFormItem[]) {
     subtotal,
     discount,
     total: roundProposalNumber(subtotal - discount, 2),
+  };
+}
+
+export function calculateProposalOptionPreviews(commonItems: ProposalFormItem[], options: ProposalOptionInput[]) {
+  return options.map((option, index) => ({
+    ...calculateProposalPreview([...commonItems, ...option.items]),
+    name: option.name,
+    position: index + 1,
+  }));
+}
+
+export function summarizeProposalOptionValues(
+  totals: Array<number | string>,
+  selectedTotal: number | string | null = null,
+): ProposalOptionValueSummary {
+  const values = totals.map(Number).filter(Number.isFinite);
+  return {
+    minimum: values.length ? Math.min(...values) : 0,
+    maximum: values.length ? Math.max(...values) : 0,
+    selected: selectedTotal === null ? null : Number(selectedTotal),
   };
 }

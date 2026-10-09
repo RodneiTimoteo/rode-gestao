@@ -9,12 +9,13 @@ import type {
   ProposalItem,
   ProposalListResult,
   ProposalOpportunityOption,
+  ProposalOptionRecord,
   ProposalRecord,
   ProposalView,
   ServiceOption,
 } from "@/features/proposals/types";
 
-const proposalColumns = "id, organization_id, client_id, opportunity_id, proposal_number, code, revision_group_id, revision_number, supersedes_proposal_id, title, status, valid_until, payment_terms, execution_deadline, notes, commercial_terms, rejection_reason, subtotal_amount, discount_amount, total_amount, sent_at, approved_at, approved_by, rejected_at, cancelled_at, created_by, created_at, updated_at";
+const proposalColumns = "id, organization_id, client_id, opportunity_id, proposal_number, code, revision_group_id, revision_number, supersedes_proposal_id, title, proposal_format, selected_option_id, status, valid_until, payment_terms, execution_deadline, notes, commercial_terms, rejection_reason, subtotal_amount, discount_amount, total_amount, sent_at, approved_at, approved_by, rejected_at, cancelled_at, created_by, created_at, updated_at";
 
 function safeSearch(value: string) { return value.replace(/[^\p{L}\p{N}\s.-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80); }
 
@@ -71,15 +72,26 @@ export async function getProposalById(supabase: SupabaseClient, organizationId: 
   if (error) throw new Error("Não foi possível carregar a proposta.");
   if (!data) return null;
   const proposal = data as ProposalRecord;
-  const [names, itemsResult, eventsResult, attachmentsResult, opportunityResult] = await Promise.all([
+  const [names, itemsResult, optionsResult, eventsResult, attachmentsResult, opportunityResult] = await Promise.all([
     clientNames(supabase, organizationId, [proposal.client_id]),
-    supabase.from("proposal_items").select("id, proposal_id, service_id, position, service_name_snapshot, description, quantity, unit_price, discount_amount, line_total").eq("organization_id", organizationId).eq("proposal_id", proposalId).order("position"),
+    supabase.from("proposal_items").select("id, proposal_id, option_id, service_id, position, service_name_snapshot, description, quantity, unit_price, discount_amount, line_total").eq("organization_id", organizationId).eq("proposal_id", proposalId).order("position"),
+    supabase.from("proposal_options").select("id, organization_id, proposal_id, name, description, position, subtotal_amount, discount_amount, total_amount, created_by, created_at, updated_at").eq("organization_id", organizationId).eq("proposal_id", proposalId).order("position"),
     supabase.from("proposal_events").select("id, event_type, actor_user_id, description, event_data, occurred_at").eq("organization_id", organizationId).eq("proposal_id", proposalId).order("occurred_at", { ascending: false }),
     supabase.from("proposal_attachments").select("id, proposal_id, logical_file_id, version, supersedes_attachment_id, original_file_name, storage_object_path, mime_type, size_bytes, is_current, storage_deleted_at, uploaded_by, created_at").eq("organization_id", organizationId).eq("proposal_id", proposalId).is("storage_deleted_at", null).order("created_at", { ascending: false }),
     proposal.opportunity_id ? supabase.from("opportunities").select("id, title").eq("organization_id", organizationId).eq("id", proposal.opportunity_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
   ]);
-  if (itemsResult.error || eventsResult.error || attachmentsResult.error || opportunityResult.error) throw new Error("Não foi possível carregar os detalhes da proposta.");
-  return { ...proposal, clientName: names.get(proposal.client_id) ?? "Cliente indisponível", opportunity: opportunityResult.data, items: (itemsResult.data ?? []) as ProposalItem[], events: (eventsResult.data ?? []) as ProposalEvent[], attachments: (attachmentsResult.data ?? []) as ProposalAttachment[] };
+  if (itemsResult.error || optionsResult.error || eventsResult.error || attachmentsResult.error || opportunityResult.error) throw new Error("Não foi possível carregar os detalhes da proposta.");
+  const allItems = (itemsResult.data ?? []) as ProposalItem[];
+  const optionRecords = (optionsResult.data ?? []) as ProposalOptionRecord[];
+  return {
+    ...proposal,
+    clientName: names.get(proposal.client_id) ?? "Cliente indisponível",
+    opportunity: opportunityResult.data,
+    items: allItems.filter((item) => item.option_id === null),
+    options: optionRecords.map((option) => ({ ...option, items: allItems.filter((item) => item.option_id === option.id) })),
+    events: (eventsResult.data ?? []) as ProposalEvent[],
+    attachments: (attachmentsResult.data ?? []) as ProposalAttachment[],
+  };
 }
 
 export async function getClientProposals(supabase: SupabaseClient, organizationId: string, clientId: string) {

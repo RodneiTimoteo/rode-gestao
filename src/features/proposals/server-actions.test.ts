@@ -45,6 +45,18 @@ function validProposalForm() {
   return data;
 }
 
+function validOptionsForm() {
+  const data = new FormData();
+  data.set("client_id", uuid("1"));
+  data.set("title", "QA com opções");
+  data.set("common_items", JSON.stringify([{ service_name: "Comum", description: "Base", quantity: 1, unit_price: 100, discount_amount: 0 }]));
+  data.set("options", JSON.stringify([
+    { name: "Essencial", items: [{ service_name: "A", description: "A", quantity: 1, unit_price: 50, discount_amount: 0 }] },
+    { name: "Completa", items: [{ service_name: "B", description: "B", quantity: 1, unit_price: 100, discount_amount: 0 }] },
+  ]));
+  return data;
+}
+
 function queryResult(result: unknown) {
   const query = {
     select: () => query,
@@ -91,6 +103,48 @@ describe("Server Actions de propostas com Supabase mockado", () => {
     assert.equal(result.status, "error");
     assert.equal(result.fieldErrors?.client_id, "Selecione outro cliente.");
     assert.equal(rpcCalls, 0);
+  });
+
+  it("salva a estrutura de opções pela RPC transacional", async () => {
+    const calls: Array<[string, Record<string, unknown>]> = [];
+    const supabase = {
+      from: () => queryResult({ data: { id: uuid("1") }, error: null }),
+      rpc: async (name: string, args: Record<string, unknown>) => { calls.push([name, args]); return { data: uuid("9"), error: null }; },
+    };
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase };
+    const { saveProposalOptionsAction } = await import("./actions.ts");
+
+    await assert.rejects(() => saveProposalOptionsAction(null, { status: "idle", message: "" }, validOptionsForm()),
+      (error: unknown) => error instanceof RedirectSignal && error.location === `/propostas/${uuid("9")}?success=proposal-created`);
+    assert.equal(calls[0]?.[0], "save_proposal_options_draft");
+    assert.equal((calls[0]?.[1].target_options as unknown[]).length, 2);
+    assert.equal((calls[0]?.[1].target_common_items as unknown[]).length, 1);
+  });
+
+  it("seleciona opção por RPC e revalida a proposta", async () => {
+    const calls: unknown[] = [];
+    const supabase = { rpc: async (name: string, args: unknown) => { calls.push([name, args]); return { data: uuid("4"), error: null }; } };
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase };
+    const { selectProposalOptionAction } = await import("./actions.ts");
+    const result = await selectProposalOptionAction(uuid("3"), uuid("4"), { status: "idle", message: "" });
+    assert.equal(result.status, "success");
+    assert.deepEqual(calls, [["select_proposal_option", { target_proposal_id: uuid("3"), target_option_id: uuid("4") }]]);
+    assert.deepEqual(revalidated, ["/propostas", `/propostas/${uuid("3")}`]);
+  });
+
+  it("restringe a aprovação atômica a owner e admin", async () => {
+    let rpcCalls = 0;
+    const supabase = { rpc: async () => { rpcCalls++; return { data: uuid("3"), error: null }; } };
+    const { approveProposalOptionAction } = await import("./actions.ts");
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase };
+    const denied = await approveProposalOptionAction(uuid("3"), uuid("4"), { status: "idle", message: "" });
+    assert.equal(denied.status, "error");
+    assert.equal(rpcCalls, 0);
+
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "admin" }, supabase };
+    const approved = await approveProposalOptionAction(uuid("3"), uuid("4"), { status: "idle", message: "" });
+    assert.equal(approved.status, "success");
+    assert.equal(rpcCalls, 1);
   });
 
   it("bloqueia aprovação por member antes de chamar a RPC", async () => {

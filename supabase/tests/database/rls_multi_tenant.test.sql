@@ -286,6 +286,7 @@ select throws_ok(
 
 reset role;
 
+set constraints all immediate;
 select * from finish();
 
 rollback;

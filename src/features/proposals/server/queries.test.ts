@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getProposals } from "./queries.ts";
+import { getProposalById, getProposals } from "./queries.ts";
 
 const clientId = "00000001-0000-4000-8000-000000000000";
 
@@ -9,7 +9,7 @@ function thenableQuery(result: unknown, methods: Record<string, (...args: unknow
     then: (resolvePromise: (value: unknown) => void) => resolvePromise(result),
     ...methods,
   };
-  for (const method of ["select", "eq", "in", "ilike", "limit", "order"]) {
+  for (const method of ["select", "eq", "in", "ilike", "limit", "order", "is", "maybeSingle"]) {
     if (!query[method]) query[method] = () => query;
   }
   return query;
@@ -64,5 +64,38 @@ describe("consultas de listagem com Supabase mockado", () => {
     assert.ok(orFilter.includes("code.ilike.%Cliente drop table--%"));
     assert.ok(orFilter.includes(`client_id.in.(${clientId})`));
     assert.ok(!orFilter.includes(");"));
+  });
+
+  it("agrupa itens comuns e exclusivos em suas opções", async () => {
+    const proposalId = "00000002-0000-4000-8000-000000000000";
+    const organizationId = "00000003-0000-4000-8000-000000000000";
+    const optionA = "00000004-0000-4000-8000-000000000000";
+    const optionB = "00000005-0000-4000-8000-000000000000";
+    const proposal = { id: proposalId, organization_id: organizationId, client_id: clientId, opportunity_id: null, proposal_format: "options", selected_option_id: optionB };
+    const rows: Record<string, unknown> = {
+      proposals: { data: proposal, error: null },
+      clients: { data: [{ id: clientId, name: "Cliente QA" }], error: null },
+      proposal_items: { data: [
+        { id: "common", proposal_id: proposalId, option_id: null, position: 1 },
+        { id: "a", proposal_id: proposalId, option_id: optionA, position: 1 },
+        { id: "b", proposal_id: proposalId, option_id: optionB, position: 1 },
+      ], error: null },
+      proposal_options: { data: [
+        { id: optionA, proposal_id: proposalId, name: "Essencial", position: 1 },
+        { id: optionB, proposal_id: proposalId, name: "Completa", position: 2 },
+      ], error: null },
+      proposal_events: { data: [], error: null },
+      proposal_attachments: { data: [], error: null },
+    };
+    const supabase = { from: (table: string) => thenableQuery(rows[table]) };
+
+    const result = await getProposalById(supabase as never, organizationId, proposalId);
+
+    assert.equal(result?.items.length, 1);
+    assert.deepEqual(result?.options.map((option) => [option.name, option.items.map((item) => item.id)]), [
+      ["Essencial", ["a"]],
+      ["Completa", ["b"]],
+    ]);
+    assert.equal(result?.selected_option_id, optionB);
   });
 });
