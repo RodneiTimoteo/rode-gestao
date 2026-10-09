@@ -5,8 +5,13 @@ Esta pasta contém somente a primeira camada persistente do produto. Ela não cr
 ## Arquivos
 
 - `migrations/202610080001_initial_multi_tenant_schema.sql`: schema, integridade, índices, triggers, privilégios e RLS.
+- `migrations/202610080003_services_and_proposals.sql`: catálogo, propostas, itens, metadados de documentos, eventos e aprovação idempotente.
+- `migrations/202610080004_proposal_storage.sql`: bucket privado e políticas de objetos para PDFs de propostas.
+- `migrations/202610080005_project_templates_and_projects.sql`: templates, projetos, etapas e tarefas.
 - `bootstrap/202610080002_bootstrap_rode.sql.template`: modelo deliberadamente não executável para criar a organização RODE e indicar um owner Auth já existente.
 - `tests/database/rls_multi_tenant.test.sql`: testes pgTAP transacionais de isolamento e permissões.
+- `tests/database/proposals_projects_rls.test.sql`: testes pgTAP da etapa 4A.
+- `docs/stage-4a-proposals-projects.md`: modelo, Storage, segurança, aplicação e evolução para 4B/4C.
 
 ## Modelo e relacionamentos
 
