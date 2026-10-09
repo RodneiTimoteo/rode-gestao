@@ -1,0 +1,24 @@
+import Link from "next/link";
+import { Icon } from "@/components/ui/icon";
+import { formatCurrency, formatProposalDate } from "@/features/proposals/format";
+import { ProposalStatusBadge } from "@/features/proposals/components/proposal-status-badge";
+import type { ProposalFilters, ProposalListResult } from "@/features/proposals/types";
+
+function pageHref(filters: ProposalFilters, page: number) {
+  const params = new URLSearchParams();
+  if (filters.query) params.set("q", filters.query);
+  if (filters.status !== "all") params.set("status", filters.status);
+  if (filters.sort !== "updated") params.set("sort", filters.sort);
+  params.set("page", String(page));
+  return `/propostas?${params}`;
+}
+
+export function ProposalList({ result, filters }: { result: ProposalListResult; filters: ProposalFilters }) {
+  const pages = Math.max(1, Math.ceil(result.count / result.pageSize));
+  if (!result.proposals.length) return <div className="rounded-2xl border border-dashed border-line bg-surface px-5 py-14 text-center"><Icon name="file" className="mx-auto size-8 text-subtle" /><h2 className="mt-3 text-base font-semibold text-strong">Nenhuma proposta encontrada</h2><p className="mt-1 text-sm text-muted">{filters.query || filters.status !== "all" ? "Ajuste os filtros para ampliar a busca." : "Cadastre a primeira proposta comercial."}</p><div className="mt-5 flex flex-wrap justify-center gap-2">{(filters.query || filters.status !== "all") && <Link href="/propostas" className="rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-muted hover:bg-soft">Limpar filtros</Link>}<Link href="/propostas/nova" className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-strong">Nova proposta</Link></div></div>;
+  return <>
+    <div className="hidden overflow-hidden rounded-2xl border border-line bg-surface md:block"><table className="w-full text-left text-sm"><thead className="bg-soft text-xs uppercase tracking-wide text-subtle"><tr><th className="px-4 py-3">Proposta</th><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">Valor</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Criada / validade</th><th className="px-4 py-3 text-right">Ações</th></tr></thead><tbody className="divide-y divide-line">{result.proposals.map((proposal) => <tr key={proposal.id} className="hover:bg-soft/50"><td className="px-4 py-4"><p className="font-semibold text-strong">{proposal.code}</p><p className="mt-1 max-w-64 truncate text-muted">{proposal.title}</p></td><td className="px-4 py-4 text-muted">{proposal.clientName}</td><td className="px-4 py-4 font-semibold text-strong">{formatCurrency(proposal.total_amount)}</td><td className="px-4 py-4"><ProposalStatusBadge status={proposal.status} /></td><td className="px-4 py-4 text-muted"><p>{formatProposalDate(proposal.created_at)}</p><p className="mt-1 text-xs text-subtle">Validade: {formatProposalDate(proposal.valid_until)}</p></td><td className="px-4 py-4"><div className="flex justify-end gap-2"><Link className="rounded-lg border border-line px-3 py-2 font-semibold text-muted hover:bg-soft" href={`/propostas/${proposal.id}`}>Visualizar</Link>{proposal.status === "draft" && <Link className="rounded-lg bg-brand px-3 py-2 font-semibold text-white hover:bg-brand-strong" href={`/propostas/${proposal.id}/editar`}>Editar</Link>}</div></td></tr>)}</tbody></table></div>
+    <div className="grid gap-3 md:hidden">{result.proposals.map((proposal) => <article key={proposal.id} className="rounded-2xl border border-line bg-surface p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-brand">{proposal.code}</p><h2 className="mt-1 font-semibold text-strong">{proposal.title}</h2><p className="mt-1 text-sm text-muted">{proposal.clientName}</p></div><ProposalStatusBadge status={proposal.status} /></div><div className="mt-4 flex items-end justify-between border-t border-line pt-4"><div><p className="font-semibold text-strong">{formatCurrency(proposal.total_amount)}</p><p className="mt-1 text-xs text-subtle">Validade {formatProposalDate(proposal.valid_until)}</p></div><Link href={`/propostas/${proposal.id}`} className="rounded-lg border border-line px-3 py-2 text-sm font-semibold text-brand">Abrir</Link></div></article>)}</div>
+    {pages > 1 && <nav aria-label="Paginação" className="mt-5 flex items-center justify-between"><span className="text-sm text-muted">Página {result.page} de {pages}</span><div className="flex gap-2">{result.page > 1 && <Link className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-muted" href={pageHref(filters, result.page - 1)}>Anterior</Link>}{result.page < pages && <Link className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-muted" href={pageHref(filters, result.page + 1)}>Próxima</Link>}</div></nav>}
+  </>;
+}

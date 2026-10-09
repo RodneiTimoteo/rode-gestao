@@ -56,7 +56,7 @@ export function OpportunityForm({ action, stages, members, opportunity, cancelHr
       <Field label="Observações" htmlFor="opportunity_notes"><textarea className={textareaClassName} id="opportunity_notes" name="notes" defaultValue={opportunity?.notes ?? ""} maxLength={4000} /></Field>
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Link href={cancelHref} className="inline-flex h-11 items-center justify-center rounded-xl border border-line px-5 text-sm font-semibold text-muted hover:bg-soft">Cancelar</Link>
-        <button type="submit" disabled={pending || !stages.length} className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-strong disabled:cursor-wait disabled:opacity-60">
+        <button type="submit" disabled={pending || !stages.length} className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-on-brand hover:bg-brand-strong disabled:cursor-wait disabled:opacity-60">
           {pending ? "Salvando..." : opportunity ? "Salvar oportunidade" : "Criar oportunidade"}
         </button>
       </div>

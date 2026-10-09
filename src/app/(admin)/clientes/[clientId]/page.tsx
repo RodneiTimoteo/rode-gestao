@@ -17,6 +17,9 @@ import { formatDate, whatsappHref } from "@/features/crm/format";
 import { getCrmContext } from "@/features/crm/server/context";
 import { getClientActivities, getClientById, getClientOpportunities, getCrmMembers, getPipelineStages } from "@/features/crm/server/queries";
 import { isUuid } from "@/features/crm/validation";
+import { ProposalStatusBadge } from "@/features/proposals/components/proposal-status-badge";
+import { formatCurrency, formatProposalDate } from "@/features/proposals/format";
+import { getClientProposals } from "@/features/proposals/server/queries";
 
 export const metadata: Metadata = { title: "Detalhes do cliente" };
 
@@ -31,10 +34,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   if (context.status !== "ready") return <NoOrganizationState />;
   const client = await getClientById(context.supabase, context.organization.id, clientId);
   if (!client) notFound();
-  const [members, stages, opportunities] = await Promise.all([
+  const [members, stages, opportunities, proposals] = await Promise.all([
     getCrmMembers(context.supabase, context.organization.id, context.user),
     getPipelineStages(context.supabase, context.organization.id),
     getClientOpportunities(context.supabase, context.organization.id, client.id),
+    getClientProposals(context.supabase, context.organization.id, client.id),
   ]);
   const activities = await getClientActivities(context.supabase, context.organization.id, client.id, members, opportunities);
   const memberNames = new Map(members.map((member) => [member.userId, member.displayName]));
@@ -62,6 +66,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <Detail label="CPF / CNPJ">{client.tax_id}</Detail><Detail label="Responsável">{client.responsible_name}</Detail><Detail label="Contato">{client.contact_name}</Detail><Detail label="E-mail">{client.email}</Detail><Detail label="Telefone">{client.phone}</Detail><Detail label="WhatsApp">{client.whatsapp}</Detail><Detail label="Segmento">{client.segment}</Detail><Detail label="Localização">{[client.city, client.state, client.country].filter(Boolean).join(" · ")}</Detail><Detail label="Origem">{client.source}</Detail><Detail label="Responsável interno">{client.assigned_to ? memberNames.get(client.assigned_to) ?? "Membro" : null}</Detail><Detail label="Cadastrado em">{formatDate(client.created_at)}</Detail><Detail label="Atualizado em">{formatDate(client.updated_at)}</Detail>
             </dl>
             {client.notes && <div className="mt-5 border-t border-line pt-5"><p className="text-xs font-medium text-subtle">Observações</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">{client.notes}</p></div>}
+          </section>
+
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-3"><div><h2 className="text-base font-semibold text-strong">Propostas comerciais</h2><p className="mt-1 text-sm text-muted">Propostas e revisões vinculadas a este cliente.</p></div><Link href={`/propostas/nova?clientId=${client.id}`} className="shrink-0 rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white">Nova proposta</Link></div>
+            {proposals.length === 0 ? <p className="text-sm text-muted">Nenhuma proposta vinculada.</p> : <div className="space-y-2">{proposals.map((proposal) => <Link key={proposal.id} href={`/propostas/${proposal.id}`} className="flex flex-col gap-2 rounded-xl border border-line p-3 hover:bg-soft sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-strong">{proposal.code} · {proposal.title}</p><p className="mt-1 text-xs text-muted">{formatProposalDate(proposal.created_at)} · {formatCurrency(proposal.total_amount)}</p></div><ProposalStatusBadge status={proposal.status} /></Link>)}</div>}
           </section>
 
           <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6">

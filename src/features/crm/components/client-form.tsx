@@ -80,7 +80,7 @@ export function ClientForm({ action, members, client, cancelHref }: ClientFormPr
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Link href={cancelHref} className="inline-flex h-11 items-center justify-center rounded-xl border border-line bg-surface px-5 text-sm font-semibold text-muted hover:bg-soft">Cancelar</Link>
-        <button type="submit" disabled={pending} className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-strong disabled:cursor-wait disabled:opacity-60">
+        <button type="submit" disabled={pending} className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-on-brand hover:bg-brand-strong disabled:cursor-wait disabled:opacity-60">
           {pending ? "Salvando..." : client ? "Salvar alterações" : "Cadastrar cliente"}
         </button>
       </div>

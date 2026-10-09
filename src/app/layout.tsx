@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   const themeScript = `(() => { try { const saved = localStorage.getItem('rode-theme'); const preference = saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system'; const dark = preference === 'dark' || (preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches); document.documentElement.dataset.theme = dark ? 'dark' : 'light'; } catch { document.documentElement.dataset.theme = 'light'; } })();`;
   return (
-    <html lang="pt-BR" suppressHydrationWarning className={`${geistSans.variable} h-full antialiased`}>
+    <html lang="pt-BR" suppressHydrationWarning className={`${inter.variable} h-full antialiased`}>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="min-h-full"><ThemeProvider>{children}</ThemeProvider></body>
     </html>

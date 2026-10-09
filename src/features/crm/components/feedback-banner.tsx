@@ -6,6 +6,8 @@ const messages: Record<string, string> = {
   "opportunity-created": "Oportunidade criada com sucesso.",
   "opportunity-updated": "Oportunidade atualizada com sucesso.",
   "activity-created": "Atividade registrada no histórico.",
+  "proposal-created": "Proposta criada com sucesso.",
+  "proposal-updated": "Proposta atualizada com sucesso.",
 };
 
 export function FeedbackBanner({ code }: { code?: string }) {

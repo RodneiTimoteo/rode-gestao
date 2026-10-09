@@ -2,27 +2,36 @@
 
 :root {
   color-scheme: light;
-  --canvas: #f6f7f8;
-  --surface: #ffffff;
-  --soft: #f1f4f2;
-  --strong: #17211c;
-  --muted: #66736c;
-  --subtle: #89928d;
-  --line: #e3e7e5;
-  --brand: #1f6b49;
-  --brand-strong: #18573c;
-  --brand-soft: #eaf4ee;
-  --positive: #287650;
-  --positive-soft: #ecf7f0;
-  --danger: #ad4b3d;
-  --danger-soft: #fff0ed;
-  --warning: #9b6a25;
-  --warning-soft: #fff7e8;
+  --canvas: #f5f3ee;
+  --surface: #fffefa;
+  --surface-elevated: #ffffff;
+  --soft: #efede7;
+  --strong: #181816;
+  --muted: #605e57;
+  --subtle: #817d73;
+  --line: #dfdbd1;
+  --brand: #8a641d;
+  --brand-strong: #68490f;
+  --brand-soft: #f8efd9;
+  --on-brand: #ffffff;
+  --selected: #f4e7c5;
+  --disabled: #aaa69c;
+  --focus-ring: #b8872d;
+  --positive: #276746;
+  --positive-soft: #eaf5ee;
+  --danger: #a13f36;
+  --danger-soft: #fbecea;
+  --warning: #875c18;
+  --warning-soft: #fff3db;
+  --shadow-sm: 0 1px 2px rgb(24 24 22 / 0.05), 0 8px 24px rgb(24 24 22 / 0.035);
+  --shadow-md: 0 16px 48px rgb(24 24 22 / 0.10);
+  --canvas-pattern: radial-gradient(circle at 88% 4%, rgb(190 148 64 / 0.10), transparent 28rem), linear-gradient(180deg, rgb(255 255 255 / 0.52), transparent 22rem);
 }
 
 @theme inline {
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
+  --color-elevated: var(--surface-elevated);
   --color-soft: var(--soft);
   --color-strong: var(--strong);
   --color-muted: var(--muted);
@@ -31,33 +40,45 @@
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
   --color-brand-soft: var(--brand-soft);
+  --color-on-brand: var(--on-brand);
+  --color-selected: var(--selected);
+  --color-disabled: var(--disabled);
+  --color-focus-ring: var(--focus-ring);
   --color-positive: var(--positive);
   --color-positive-soft: var(--positive-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
 }
 
 html[data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #101512;
-  --surface: #171e1a;
-  --soft: #202923;
-  --strong: #f1f5f2;
-  --muted: #a7b2ab;
-  --subtle: #7e8b83;
-  --line: #2c3630;
-  --brand: #64b083;
-  --brand-strong: #76c392;
-  --brand-soft: #1d3528;
-  --positive: #72bd8f;
-  --positive-soft: #193326;
-  --danger: #ef9a8e;
-  --danger-soft: #3a211f;
-  --warning: #e0b571;
-  --warning-soft: #352a19;
+  --canvas: #0d0d0c;
+  --surface: #151513;
+  --surface-elevated: #1b1b18;
+  --soft: #21211e;
+  --strong: #f4f0e6;
+  --muted: #c2bdb1;
+  --subtle: #938e83;
+  --line: #333129;
+  --brand: #d7ae58;
+  --brand-strong: #efc96f;
+  --brand-soft: #302713;
+  --on-brand: #18140b;
+  --selected: #3b3019;
+  --disabled: #706c63;
+  --focus-ring: #edc56b;
+  --positive: #78c49b;
+  --positive-soft: #172c21;
+  --danger: #f2a39a;
+  --danger-soft: #351d1a;
+  --warning: #ebbe69;
+  --warning-soft: #322614;
+  --shadow-sm: 0 1px 0 rgb(255 255 255 / 0.03), 0 10px 28px rgb(0 0 0 / 0.22);
+  --shadow-md: 0 20px 60px rgb(0 0 0 / 0.42);
+  --canvas-pattern: radial-gradient(circle at 88% 4%, rgb(215 174 88 / 0.10), transparent 28rem), linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 22rem);
 }
 
 * { box-sizing: border-box; }
@@ -65,13 +86,19 @@ html { background: var(--canvas); }
 body {
   background: var(--canvas);
   color: var(--strong);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), "Segoe UI", Arial, sans-serif;
   margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 button, a { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-::selection { background: #cae7d5; color: #123c2b; }
+button, input, select, textarea { font: inherit; }
+.bg-brand.text-white { color: var(--on-brand); }
+.rounded-2xl.border.border-line.bg-surface { box-shadow: var(--shadow-sm); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+::selection { background: var(--selected); color: var(--strong); }
+
+dialog::backdrop { background: rgb(6 6 5 / 0.66); backdrop-filter: blur(5px); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

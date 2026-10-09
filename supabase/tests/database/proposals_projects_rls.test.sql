@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(42);
+select plan(49);
 
 insert into auth.users (id, email)
 values
@@ -10,7 +10,8 @@ values
   ('11000000-0000-4000-8000-000000000002', 'admin-a@stage4a.test'),
   ('11000000-0000-4000-8000-000000000003', 'member-a@stage4a.test'),
   ('11000000-0000-4000-8000-000000000004', 'owner-b@stage4a.test'),
-  ('11000000-0000-4000-8000-000000000005', 'external@stage4a.test');
+  ('11000000-0000-4000-8000-000000000005', 'external@stage4a.test'),
+  ('11000000-0000-4000-8000-000000000006', 'suspended-a@stage4b.test');
 
 insert into public.organizations (id, name, slug)
 values
@@ -24,7 +25,8 @@ values
   ('21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', 'owner', 'active', '11000000-0000-4000-8000-000000000001', now()),
   ('21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000002', 'admin', 'active', '11000000-0000-4000-8000-000000000001', now()),
   ('21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000003', 'member', 'active', '11000000-0000-4000-8000-000000000001', now()),
-  ('21000000-0000-4000-8000-000000000002', '11000000-0000-4000-8000-000000000004', 'owner', 'active', '11000000-0000-4000-8000-000000000004', now());
+  ('21000000-0000-4000-8000-000000000002', '11000000-0000-4000-8000-000000000004', 'owner', 'active', '11000000-0000-4000-8000-000000000004', now()),
+  ('21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000006', 'admin', 'suspended', '11000000-0000-4000-8000-000000000001', null);
 
 insert into public.clients (id, organization_id, name, created_by)
 values
@@ -150,12 +152,42 @@ select throws_ok(
 );
 
 update public.proposals set status = 'sent' where id = '51000000-0000-4000-8000-000000000001';
-select lives_ok($$ select public.approve_proposal('51000000-0000-4000-8000-000000000001') $$, 'aprovação válida é transacional');
-select lives_ok($$ select public.approve_proposal('51000000-0000-4000-8000-000000000001') $$, 'repetir aprovação é idempotente');
+select throws_ok(
+  $$ select public.approve_proposal('51000000-0000-4000-8000-000000000001') $$,
+  '42501', 'only organization owners and admins can approve proposals',
+  'member não aprova via RPC'
+);
+select throws_ok(
+  $$ update public.proposals set status = 'approved' where id = '51000000-0000-4000-8000-000000000001' $$,
+  '42501', 'only organization owners and admins can approve proposals',
+  'member não aprova via UPDATE direto'
+);
+select lives_ok(
+  $$ update public.proposals set status = 'negotiating' where id = '51000000-0000-4000-8000-000000000001' $$,
+  'member mantém transições comerciais permitidas'
+);
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"sub":"11000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+
+select lives_ok($$ select public.approve_proposal('51000000-0000-4000-8000-000000000001') $$, 'admin aprova proposta em negociação');
+select lives_ok($$ select public.approve_proposal('51000000-0000-4000-8000-000000000001') $$, 'aprovação repetida por admin é idempotente');
 select is(
   (select count(*)::bigint from public.proposal_events where proposal_id = '51000000-0000-4000-8000-000000000001' and event_type = 'approved'),
   1::bigint,
   'aprovação idempotente registra somente uma transição'
+);
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claims', '{"sub":"11000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+select throws_ok(
+  $$ select public.approve_proposal('51000000-0000-4000-8000-000000000001') $$,
+  '42501', 'only organization owners and admins can approve proposals',
+  'member não contorna autorização na aprovação idempotente'
 );
 select throws_ok(
   $$ update public.proposals set title = 'Sobrescrita indevida' where id = '51000000-0000-4000-8000-000000000001' $$,
@@ -265,9 +297,16 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000004', true);
 select set_config('request.jwt.claims', '{"sub":"11000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
 
+update public.proposals set status = 'sent' where id = '51000000-0000-4000-8000-000000000003';
+select lives_ok($$ select public.approve_proposal('51000000-0000-4000-8000-000000000003') $$, 'owner aprova proposta enviada da própria organização');
 select is((select count(*)::bigint from public.proposals), 1::bigint, 'owner B lê somente propostas da organização B');
 select is((select count(*)::bigint from public.proposal_attachments), 0::bigint, 'owner B não lê metadados de anexos da organização A');
 select is((select count(*)::bigint from storage.objects where bucket_id = 'proposal-documents'), 0::bigint, 'owner B não lê objeto privado da organização A');
+select throws_ok(
+  $$ select public.approve_proposal('51000000-0000-4000-8000-000000000001') $$,
+  'P0001', 'proposal not found or access denied',
+  'owner externo não aprova proposta de outra organização'
+);
 
 reset role;
 set local role authenticated;
@@ -280,6 +319,16 @@ select is((select count(*)::bigint from storage.objects where bucket_id = 'propo
 select throws_ok(
   $$ insert into public.projects (organization_id, client_id, name) values ('21000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001', 'Projeto externo') $$,
   '42501', null, 'usuário externo não cria projeto'
+);
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000006', true);
+select set_config('request.jwt.claims', '{"sub":"11000000-0000-4000-8000-000000000006","role":"authenticated"}', true);
+select throws_ok(
+  $$ select public.approve_proposal('51000000-0000-4000-8000-000000000001') $$,
+  'P0001', 'proposal not found or access denied',
+  'admin suspenso não aprova'
 );
 
 reset role;

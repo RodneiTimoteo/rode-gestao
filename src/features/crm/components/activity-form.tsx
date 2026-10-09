@@ -34,7 +34,7 @@ export function ActivityForm({ action, opportunities }: { action: (state: Action
           </Field>
         </div>
       </div>
-      <button type="submit" disabled={pending} className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-strong disabled:cursor-wait disabled:opacity-60">
+      <button type="submit" disabled={pending} className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-on-brand hover:bg-brand-strong disabled:cursor-wait disabled:opacity-60">
         {pending ? "Registrando..." : "Registrar atividade"}
       </button>
     </form>
