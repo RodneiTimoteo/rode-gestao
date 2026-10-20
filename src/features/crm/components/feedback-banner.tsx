@@ -8,6 +8,9 @@ const messages: Record<string, string> = {
   "activity-created": "Atividade registrada no histórico.",
   "proposal-created": "Proposta criada com sucesso.",
   "proposal-updated": "Proposta atualizada com sucesso.",
+  "project-created": "Projeto cadastrado com sucesso.",
+  "project-from-proposal": "Projeto criado a partir da proposta aprovada.",
+  "project-existing": "Esta proposta já possuía um projeto. Abrimos o cadastro existente.",
 };
 
 export function FeedbackBanner({ code }: { code?: string }) {

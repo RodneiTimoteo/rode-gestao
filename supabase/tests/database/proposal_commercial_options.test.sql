@@ -118,7 +118,7 @@ select lives_ok($$
 $$, 'proposta auxiliar permite testar vínculo cruzado');
 
 select lives_ok($$update public.proposals set status='sent' where id=(select id from option_test_ids where key='proposal')$$, 'member envia proposta completa');
-select throws_ok($$select public.approve_proposal((select id from option_test_ids where key='proposal'))$$, 'P0001', null, 'member não aprova proposta');
+select throws_ok($$select public.approve_proposal((select id from option_test_ids where key='proposal'))$$, '42501', null, 'member não aprova proposta');
 
 reset role; set local role authenticated;
 select set_config('request.jwt.claim.sub', '16000000-0000-4000-8000-000000000001', true);
@@ -138,7 +138,7 @@ select is((select count(*)::bigint from public.proposal_events where proposal_id
 select lives_ok($$select public.select_proposal_option((select id from option_test_ids where key='proposal'), (select id from public.proposal_options where proposal_id=(select id from option_test_ids where key='proposal') and name='Essencial'))$$, 'repetir a escolha é idempotente');
 select is((select count(*)::bigint from public.proposal_events where proposal_id=(select id from option_test_ids where key='proposal') and event_type in ('option_selected','option_selection_changed')), 2::bigint, 'idempotência não duplica auditoria');
 select throws_ok($$select public.select_proposal_option((select id from option_test_ids where key='tenant-b'), '00000000-0000-4000-8000-000000000001')$$, 'P0001', 'proposal not found or access denied', 'RLS oculta proposta de outra organização');
-select throws_ok($$select public.approve_proposal_option((select id from option_test_ids where key='proposal'), (select id from public.proposal_options where proposal_id=(select id from option_test_ids where key='proposal') and name='Completa'))$$, 'P0001', null, 'member não usa aprovação atômica');
+select throws_ok($$select public.approve_proposal_option((select id from option_test_ids where key='proposal'), (select id from public.proposal_options where proposal_id=(select id from option_test_ids where key='proposal') and name='Completa'))$$, '42501', null, 'member não usa aprovação atômica');
 
 reset role; set local role authenticated;
 select set_config('request.jwt.claim.sub', '16000000-0000-4000-8000-000000000001', true);
@@ -193,7 +193,7 @@ select set_config('request.jwt.claims', '{"sub":"16000000-0000-4000-8000-0000000
 select throws_ok($$
   select public.save_proposal_options_draft('26000000-0000-4000-8000-000000000001', null, '36000000-0000-4000-8000-000000000001', null, 'Suspensa', null, null, null, null, null, '[]'::jsonb,
   '[{"name":"1","items":[{"service_name":"1","description":"1","quantity":1,"unit_price":1}]},{"name":"2","items":[{"service_name":"2","description":"2","quantity":1,"unit_price":2}]}]'::jsonb)
-$$, 'P0001', null, 'membro suspenso não modifica dados');
+$$, '42501', null, 'membro suspenso não modifica dados');
 
 reset role; set local role authenticated;
 select set_config('request.jwt.claim.sub', '16000000-0000-4000-8000-000000000005', true);

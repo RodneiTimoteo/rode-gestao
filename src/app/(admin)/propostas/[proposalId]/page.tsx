@@ -46,13 +46,19 @@ export default async function ProposalDetailPage({ params, searchParams }: {
   const canApprove = context.organization.role === "owner" || context.organization.role === "admin";
   const memberNames = Object.fromEntries(members.map((member) => [member.userId, member.displayName]));
   const selectedOption = proposal.options.find((option) => option.id === proposal.selected_option_id) ?? null;
+  const { data: linkedProject } = proposal.status === "approved"
+    ? await context.supabase.from("projects").select("id").eq("organization_id", context.organization.id).eq("proposal_id", proposal.id).maybeSingle()
+    : { data: null };
 
   return <>
     <Link href="/propostas" className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-brand"><Icon name="arrowLeft" className="size-4" /> Voltar para propostas</Link>
     <FeedbackBanner code={success} />
     <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">{proposal.code} · Revisão {proposal.revision_number}</p><ProposalStatusBadge status={proposal.status} /></div><h1 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-strong sm:text-[30px]">{proposal.title}</h1><p className="mt-2 text-sm text-muted">{proposal.clientName}</p></div>
-      {proposal.status === "draft" && <Link href={`/propostas/${proposal.id}/editar`} className="inline-flex h-10 w-fit items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-muted hover:bg-soft"><Icon name="edit" className="size-4" /> Editar rascunho</Link>}
+      <div className="flex flex-wrap gap-2">
+        {proposal.status === "draft" && <Link href={`/propostas/${proposal.id}/editar`} className="inline-flex h-10 w-fit items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-muted hover:bg-soft"><Icon name="edit" className="size-4" /> Editar rascunho</Link>}
+        {proposal.status === "approved" && <Link href={linkedProject ? `/projetos/${linkedProject.id}` : `/projetos/novo?proposal=${proposal.id}`} className="inline-flex h-10 w-fit items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand hover:bg-brand-strong"><Icon name="projects" className="size-4" /> {linkedProject ? "Abrir projeto" : "Criar projeto"}</Link>}
+      </div>
     </header>
 
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
