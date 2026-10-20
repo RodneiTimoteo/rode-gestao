@@ -15,6 +15,9 @@ function databaseMessage(error: PostgrestError) {
   if (error.code === "22003" || error.code === "22P02" || error.code === "23514") return "Um dos valores informados está fora dos limites permitidos.";
   if (error.message.includes("terminal proposals")) return "Propostas encerradas são imutáveis. Crie uma revisão para continuar.";
   if (error.message.includes("invalid proposal status")) return "Esta mudança de status não é permitida.";
+  if (error.message.includes("cannot be selected in status")) return "A opção só pode ser selecionada quando a proposta estiver enviada ou em negociação.";
+  if (error.message.includes("cannot be approved from status")) return "A proposta não pode ser aprovada no estado atual.";
+  if (error.message.includes("approved proposal option is immutable")) return "A opção de uma proposta aprovada não pode ser alterada.";
   if (error.message.includes("rejection reason")) return "Informe o motivo da rejeição.";
   if (error.message.includes("option") || error.message.includes("options")) return "A opção comercial informada não é válida para esta proposta.";
   return "Não foi possível concluir a operação agora. Tente novamente.";
@@ -140,10 +143,11 @@ export async function transitionProposalAction(proposalId: string, nextStatus: P
   if (!isUuid(proposalId)) return { status: "error", message: "Proposta inválida." };
   const auth = await proposalContext();
   if (!auth.ok) return auth.state;
-  const { data: proposal, error: readError } = await auth.context.supabase.from("proposals").select("id, client_id, status").eq("organization_id", auth.context.organization.id).eq("id", proposalId).maybeSingle();
+  const { data: proposal, error: readError } = await auth.context.supabase.from("proposals").select("id, client_id, status, proposal_format").eq("organization_id", auth.context.organization.id).eq("id", proposalId).maybeSingle();
   if (readError || !proposal) return { status: "error", message: "Proposta não encontrada ou sem permissão de acesso." };
   const canApprove = auth.context.organization.role === "owner" || auth.context.organization.role === "admin";
   if (!canTransitionProposal(proposal.status as ProposalStatus, nextStatus, canApprove)) return { status: "error", message: nextStatus === "approved" && !canApprove ? "Somente owner e admin podem aprovar propostas." : "Esta mudança de status não é permitida." };
+  if (nextStatus === "approved" && proposal.proposal_format === "options") return { status: "error", message: "Aprove a proposta pela opção comercial selecionada." };
 
   let error: PostgrestError | null = null;
   if (nextStatus === "approved") {

@@ -178,6 +178,20 @@ describe("Server Actions de propostas com Supabase mockado", () => {
     assert.equal(rejected.fieldErrors?.rejection_reason, "O motivo é obrigatório.");
   });
 
+  it("exige a RPC específica para aprovar proposta com opções", async () => {
+    let rpcCalls = 0;
+    const supabase = {
+      from: () => queryResult({ data: { id: uuid("3"), client_id: uuid("1"), status: "sent", proposal_format: "options" }, error: null }),
+      rpc: async () => { rpcCalls++; return { data: uuid("3"), error: null }; },
+    };
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "admin" }, supabase };
+    const { transitionProposalAction } = await import("./actions.ts");
+    const result = await transitionProposalAction(uuid("3"), "approved", { status: "idle", message: "" }, new FormData());
+    assert.equal(result.status, "error");
+    assert.match(result.message, /opção comercial selecionada/);
+    assert.equal(rpcCalls, 0);
+  });
+
   it("cria revisão por RPC e traduz duplicidade sem expor erro do banco", async () => {
     const supabase = { rpc: async () => ({ data: uuid("5"), error: null }) };
     currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase };
