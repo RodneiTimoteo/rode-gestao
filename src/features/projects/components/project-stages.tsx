@@ -6,12 +6,14 @@ import { ProjectStageArchive } from "@/features/projects/components/project-stag
 import { ProjectStageEdit } from "@/features/projects/components/project-stage-edit";
 import { ProjectStageReorder } from "@/features/projects/components/project-stage-reorder";
 import { ProjectStageStatusActions } from "@/features/projects/components/project-stage-status-actions";
+import { ProjectStageTasks } from "@/features/projects/components/project-stage-tasks";
 import { formatProjectDate } from "@/features/projects/format";
 import {
   isTerminalProjectStatus,
   normalizeProgressPercent,
   projectStageResponsibleName,
   projectStageReorderAvailability,
+  groupProjectTasksByStage,
   projectStagesAreEmpty,
   projectTaskProgressLabel,
 } from "@/features/projects/presentation";
@@ -65,6 +67,7 @@ function StageCard({
   reorderStage,
   canMoveUp,
   canMoveDown,
+  tasks,
 }: {
   stage: ProjectStageRecord;
   progress: ProjectStageProgress;
@@ -76,6 +79,7 @@ function StageCard({
   reorderStage: (stageId: string, direction: "up" | "down", state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  tasks: ProjectStagesResult["tasks"];
 }) {
   return (
     <li className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -119,6 +123,7 @@ function StageCard({
       <div className="mt-4 rounded-xl bg-soft/60 p-3">
         <ProgressBar label={`Progresso da etapa ${stage.name}`} progress={progress} />
       </div>
+      <ProjectStageTasks stageName={stage.name} tasks={tasks} members={members} />
     </li>
   );
 }
@@ -143,6 +148,7 @@ export function ProjectStages({
   reorderStage: (stageId: string, direction: "up" | "down", state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   const progressByStage = new Map(result.stageProgress.map((progress) => [progress.project_stage_id, progress]));
+  const tasksByStage = groupProjectTasksByStage(result.tasks);
   const terminal = isTerminalProjectStatus(projectStatus);
   const empty = projectStagesAreEmpty(result.stages);
 
@@ -191,6 +197,7 @@ export function ProjectStages({
               reorderStage={reorderStage}
               canMoveUp={availability.canMoveUp}
               canMoveDown={availability.canMoveDown}
+              tasks={tasksByStage.get(stage.id) ?? []}
               progress={progressByStage.get(stage.id) ?? {
                 project_stage_id: stage.id,
                 eligible_tasks: 0,

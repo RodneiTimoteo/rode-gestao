@@ -15,10 +15,31 @@ import type {
   ProjectStageProgress,
   ProjectStageRecord,
   ProjectStagesResult,
+  ProjectTaskRecord,
 } from "@/features/projects/types";
 
 const projectColumns = "id, organization_id, client_id, proposal_id, name, description, status, owner_user_id, start_date, original_expected_end_date, expected_end_date, completed_at, contracted_amount, proposal_snapshot, created_by, created_at, updated_at";
 const projectStageColumns = "id, organization_id, project_id, name, description, position, status, responsible_user_id, planned_start_date, planned_end_date, started_at, completed_at, archived_at, created_at, updated_at";
+const projectTaskColumns = "id, organization_id, project_id, project_stage_id, title, description, position, status, priority, assigned_to, due_date, completed_at, created_at, updated_at";
+
+async function getAllProjectTasks(supabase: SupabaseClient, organizationId: string, projectId: string) {
+  const tasks: ProjectTaskRecord[] = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("project_tasks")
+      .select(projectTaskColumns)
+      .eq("organization_id", organizationId)
+      .eq("project_id", projectId)
+      .order("project_stage_id", { ascending: true })
+      .order("position", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    const page = (data ?? []) as ProjectTaskRecord[];
+    tasks.push(...page);
+    if (page.length < pageSize) return { data: tasks, error: null };
+  }
+}
 
 function safeSearch(value: string) {
   return value.replace(/[^\p{L}\p{N}\s.-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80);
@@ -164,7 +185,7 @@ export async function getProjectStages(
 ): Promise<ProjectStagesResult> {
   if (!isUuid(projectId)) throw new Error("Projeto inválido.");
 
-  const [stagesResult, stageProgressResult, projectProgressResult] = await Promise.all([
+  const [stagesResult, tasksResult, stageProgressResult, projectProgressResult] = await Promise.all([
     supabase
       .from("project_stages")
       .select(projectStageColumns)
@@ -172,6 +193,7 @@ export async function getProjectStages(
       .eq("project_id", projectId)
       .is("archived_at", null)
       .order("position", { ascending: true }),
+    getAllProjectTasks(supabase, organizationId, projectId),
     supabase
       .from("project_stage_progress")
       .select("project_stage_id, eligible_tasks, completed_tasks, progress_percent")
@@ -185,12 +207,13 @@ export async function getProjectStages(
       .maybeSingle(),
   ]);
 
-  if (stagesResult.error || stageProgressResult.error || projectProgressResult.error) {
+  if (stagesResult.error || tasksResult.error || stageProgressResult.error || projectProgressResult.error) {
     throw new Error("Não foi possível carregar as etapas do projeto.");
   }
 
   return {
     stages: (stagesResult.data ?? []) as ProjectStageRecord[],
+    tasks: (tasksResult.data ?? []) as ProjectTaskRecord[],
     stageProgress: (stageProgressResult.data ?? []) as ProjectStageProgress[],
     projectProgress: projectProgressResult.data ?? {
       eligible_tasks: 0,

@@ -3,6 +3,7 @@ import { formatProjectDate } from "@/features/projects/format";
 import {
   getProjectDeadlineEventDetails,
   getProjectStageStatusEventDetails,
+  getProjectTaskStatusEventDetails,
   getProjectStatusEventDetails,
   translateProjectStatusDescription,
 } from "@/features/projects/presentation";
@@ -24,6 +25,13 @@ function ChangeDetails({ from, to }: { from: string; to: string }) {
 }
 
 function EventContent({ event }: { event: ProjectEvent }) {
+  if (["task_status_changed", "task_completed", "task_reopened"].includes(event.event_type)) {
+    const status = getProjectTaskStatusEventDetails(event.event_data);
+    if (status.from || status.to) {
+      return <ChangeDetails from={status.from ?? "Não informado"} to={status.to ?? "Não informado"} />;
+    }
+  }
+
   if (event.event_type === "stage_updated") {
     const status = getProjectStageStatusEventDetails(event.event_data);
     if (status.from && status.to && status.from !== status.to) {
@@ -31,7 +39,7 @@ function EventContent({ event }: { event: ProjectEvent }) {
     }
   }
 
-  if (event.event_type === "deadline_changed") {
+  if (event.event_type === "deadline_changed" || event.event_type === "task_deadline_changed") {
     const deadline = getProjectDeadlineEventDetails(event.event_data);
     return (
       <>
@@ -39,10 +47,12 @@ function EventContent({ event }: { event: ProjectEvent }) {
           from={deadline.from ? formatProjectDate(deadline.from) : "Não informado"}
           to={deadline.to ? formatProjectDate(deadline.to) : "Não informado"}
         />
-        <p className="mt-2 rounded-lg bg-soft px-3 py-2 text-sm leading-5 text-muted">
-          <strong className="text-strong">Justificativa:</strong>{" "}
-          {event.justification?.trim() || "Não informada no histórico."}
-        </p>
+        {event.event_type === "deadline_changed" && (
+          <p className="mt-2 rounded-lg bg-soft px-3 py-2 text-sm leading-5 text-muted">
+            <strong className="text-strong">Justificativa:</strong>{" "}
+            {event.justification?.trim() || "Não informada no histórico."}
+          </p>
+        )}
       </>
     );
   }

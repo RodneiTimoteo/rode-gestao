@@ -1,6 +1,6 @@
-import { projectStageStatusLabels, projectStatusLabels, projectStatuses } from "@/features/projects/constants";
+import { projectStageStatusLabels, projectStatusLabels, projectStatuses, projectTaskStatusLabels } from "@/features/projects/constants";
 import type { CrmMember } from "@/features/crm/types";
-import type { ProjectStageStatus, ProjectStatus } from "@/features/projects/types";
+import type { ProjectStageStatus, ProjectStatus, ProjectTaskRecord, ProjectTaskStatus } from "@/features/projects/types";
 
 const projectStageTransitions: Record<ProjectStageStatus, ProjectStageStatus[]> = {
   pending: ["in_progress", "skipped"],
@@ -56,6 +56,19 @@ export function getProjectStageStatusEventDetails(eventData: Record<string, unkn
   };
 }
 
+export function getProjectTaskStatusEventDetails(eventData: Record<string, unknown>) {
+  const from = eventData.from;
+  const to = eventData.to;
+  return {
+    from: typeof from === "string" && Object.hasOwn(projectTaskStatusLabels, from)
+      ? projectTaskStatusLabels[from as ProjectTaskStatus]
+      : null,
+    to: typeof to === "string" && Object.hasOwn(projectTaskStatusLabels, to)
+      ? projectTaskStatusLabels[to as ProjectTaskStatus]
+      : null,
+  };
+}
+
 export function translateProjectStatusDescription(description: string) {
   return description.replace(statusCodePattern, (status) => projectStatusLabels[status as ProjectStatus]);
 }
@@ -106,6 +119,24 @@ export function projectTaskProgressLabel(completed: number, eligible: number) {
 export function projectStageResponsibleName(responsibleUserId: string | null, members: CrmMember[]) {
   if (!responsibleUserId) return "Não atribuído";
   return members.find((member) => member.userId === responsibleUserId)?.displayName ?? "Membro indisponível";
+}
+
+export function projectTaskAssigneeName(assignedTo: string | null, members: CrmMember[]) {
+  if (!assignedTo) return "Não atribuído";
+  return members.find((member) => member.userId === assignedTo)?.displayName ?? "Membro indisponível";
+}
+
+export function groupProjectTasksByStage(tasks: ProjectTaskRecord[]) {
+  const grouped = new Map<string, ProjectTaskRecord[]>();
+  for (const task of tasks) {
+    const stageTasks = grouped.get(task.project_stage_id) ?? [];
+    stageTasks.push(task);
+    grouped.set(task.project_stage_id, stageTasks);
+  }
+  for (const stageTasks of grouped.values()) {
+    stageTasks.sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
+  }
+  return grouped;
 }
 
 export function isTerminalProjectStatus(status: ProjectStatus) {

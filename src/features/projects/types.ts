@@ -8,6 +8,8 @@ export type ProjectStatus =
 
 export type ProjectStageStatus = "pending" | "in_progress" | "completed" | "skipped";
 export type ProjectStageReorderDirection = "up" | "down";
+export type ProjectTaskStatus = "todo" | "in_progress" | "blocked" | "done" | "cancelled";
+export type ProjectTaskPriority = "low" | "medium" | "high" | "urgent";
 
 export type ProjectEventSubjectType = "project" | "stage" | "task" | "checklist_item";
 
@@ -22,7 +24,15 @@ export type ProjectEventType =
   | "stage_created"
   | "stage_updated"
   | "stage_reordered"
-  | "stage_archived";
+  | "stage_archived"
+  | "task_created"
+  | "task_updated"
+  | "task_status_changed"
+  | "task_completed"
+  | "task_reopened"
+  | "task_assignee_changed"
+  | "task_deadline_changed"
+  | "task_reordered";
 
 export type ProjectActionState = {
   status: "idle" | "success" | "error";
@@ -126,6 +136,23 @@ export type ProjectStageProgress = {
   progress_percent: number;
 };
 
+export type ProjectTaskRecord = {
+  id: string;
+  organization_id: string;
+  project_id: string;
+  project_stage_id: string;
+  title: string;
+  description: string | null;
+  position: number;
+  status: ProjectTaskStatus;
+  priority: ProjectTaskPriority;
+  assigned_to: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ProjectProgress = {
   eligible_tasks: number;
   completed_tasks: number;
@@ -134,6 +161,7 @@ export type ProjectProgress = {
 
 export type ProjectStagesResult = {
   stages: ProjectStageRecord[];
+  tasks: ProjectTaskRecord[];
   stageProgress: ProjectStageProgress[];
   projectProgress: ProjectProgress;
 };
