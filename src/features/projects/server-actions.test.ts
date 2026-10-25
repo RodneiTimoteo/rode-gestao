@@ -73,6 +73,8 @@ function stageSupabase(options: {
   } | null;
   rpcError?: { code: string; message: string } | null;
   pendingTask?: { id: string } | null;
+  stageList?: Array<{ id: string }>;
+  rpcData?: string | null;
 } = {}) {
   const fromCalls: Array<{ table: string; filters: Record<string, unknown> }> = [];
   const rpcCalls: Array<[string, Record<string, unknown>]> = [];
@@ -92,6 +94,7 @@ function stageSupabase(options: {
       }
     : options.stage;
   const pendingTask = options.pendingTask === undefined ? null : options.pendingTask;
+  const stageList = options.stageList ?? [{ id: uuid("3") }, { id: uuid("4") }, { id: uuid("5") }];
   return {
     fromCalls,
     rpcCalls,
@@ -102,6 +105,9 @@ function stageSupabase(options: {
         const query = {
           select() { return query; },
           eq(column: string, value: unknown) { call.filters[column] = value; return query; },
+          is(column: string, value: unknown) { call.filters[column] = value; return query; },
+          order(column: string, config: { ascending?: boolean } = {}) { call.filters[`order:${column}`] = config.ascending === false ? "desc" : "asc"; return query; },
+          async range(from: number, to: number) { call.filters.range = [from, to]; return { data: stageList.slice(from, to + 1), error: null }; },
           not(column: string, operator: string, value: unknown) { call.filters[`not:${column}`] = `${operator}:${String(value)}`; return query; },
           limit(value: number) { call.filters.limit = value; return query; },
           async maybeSingle() {
@@ -116,7 +122,7 @@ function stageSupabase(options: {
       },
       async rpc(name: string, args: Record<string, unknown>): Promise<{ data: string | null; error: { code: string; message: string } | null }> {
         rpcCalls.push([name, args]);
-        return { data: uuid("4"), error: options.rpcError ?? null };
+        return { data: options.rpcData === undefined ? uuid("4") : options.rpcData, error: options.rpcError ?? null };
       },
     },
   };
@@ -577,5 +583,113 @@ describe("Server Actions de projetos com Supabase mockado", () => {
     assert.equal(failedResult.message, "Não foi possível concluir a operação agora. Tente novamente.");
     assert.equal(failedResult.message.includes("private"), false);
     assert.deepEqual(revalidated, []);
+  });
+
+  it("move a primeira etapa para baixo usando a ordem completa lida no servidor", async () => {
+    const supabase = stageSupabase({ rpcData: uuid("9") });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+    const { reorderProjectStagesAction } = await import("./actions.ts");
+    const result = await reorderProjectStagesAction(uuid("9"), uuid("3"), "down", { status: "idle", message: "" }, new FormData());
+    assert.deepEqual(result, { status: "success", message: "Ordem das etapas atualizada com sucesso." });
+    assert.deepEqual(supabase.rpcCalls, [["reorder_project_stages", {
+      target_project_id: uuid("9"), ordered_stage_ids: [uuid("4"), uuid("3"), uuid("5")],
+    }]]);
+    assert.deepEqual(supabase.fromCalls.at(-1), {
+      table: "project_stages",
+      filters: { organization_id: uuid("8"), project_id: uuid("9"), archived_at: null, "order:position": "asc", range: [0, 499] },
+    });
+    assert.equal(supabase.fromCalls.some((call) => call.table === "project_events"), false);
+    assert.deepEqual(revalidated, ["/projetos", `/projetos/${uuid("9")}`]);
+  });
+
+  it("move a última etapa para cima", async () => {
+    const supabase = stageSupabase({ rpcData: uuid("9") });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+    const { reorderProjectStagesAction } = await import("./actions.ts");
+    const result = await reorderProjectStagesAction(uuid("9"), uuid("5"), "up", { status: "idle", message: "" }, new FormData());
+    assert.equal(result.status, "success");
+    assert.deepEqual(supabase.rpcCalls[0]?.[1].ordered_stage_ids, [uuid("3"), uuid("5"), uuid("4")]);
+  });
+
+  it("impede ultrapassar os limites e reordenar uma lista unitária", async () => {
+    const { reorderProjectStagesAction } = await import("./actions.ts");
+    for (const [stageId, direction, expected] of [
+      [uuid("3"), "up", /primeira etapa/],
+      [uuid("5"), "down", /última etapa/],
+    ] as const) {
+      const supabase = stageSupabase();
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+      const result = await reorderProjectStagesAction(uuid("9"), stageId, direction, { status: "idle", message: "" }, new FormData());
+      assert.match(result.message, expected);
+      assert.deepEqual(supabase.rpcCalls, []);
+    }
+    const single = stageSupabase({ stageList: [{ id: uuid("3") }] });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: single.client };
+    const result = await reorderProjectStagesAction(uuid("9"), uuid("3"), "down", { status: "idle", message: "" }, new FormData());
+    assert.match(result.message, /única etapa/);
+    assert.deepEqual(single.rpcCalls, []);
+  });
+
+  it("rejeita lista vazia e etapa inexistente ou arquivada", async () => {
+    const { reorderProjectStagesAction } = await import("./actions.ts");
+    for (const stageList of [[], [{ id: uuid("3") }, { id: uuid("5") }]]) {
+      const supabase = stageSupabase({ stageList });
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+      const result = await reorderProjectStagesAction(uuid("9"), uuid("4"), "up", { status: "idle", message: "" }, new FormData());
+      assert.match(result.message, /não encontrada na lista ativa/);
+      assert.deepEqual(supabase.rpcCalls, []);
+    }
+  });
+
+  it("rejeita identificadores e direção inválidos antes de consultar o banco", async () => {
+    const { reorderProjectStagesAction } = await import("./actions.ts");
+    for (const [projectId, stageId, direction, expected] of [
+      ["invalid", uuid("3"), "up", /Projeto inválido/],
+      [uuid("9"), "invalid", "up", /Etapa inválida/],
+      [uuid("9"), uuid("3"), "sideways", /Direção de reordenação inválida/],
+    ] as const) {
+      const supabase = stageSupabase();
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+      const result = await reorderProjectStagesAction(projectId, stageId, direction as never, { status: "idle", message: "" }, new FormData());
+      assert.match(result.message, expected);
+      assert.deepEqual(supabase.fromCalls, []);
+      assert.deepEqual(supabase.rpcCalls, []);
+    }
+  });
+
+  it("bloqueia projeto de outra organização e projetos encerrados", async () => {
+    const { reorderProjectStagesAction } = await import("./actions.ts");
+    const external = stageSupabase({ project: null });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: external.client };
+    const externalResult = await reorderProjectStagesAction(uuid("9"), uuid("3"), "down", { status: "idle", message: "" }, new FormData());
+    assert.match(externalResult.message, /não encontrado nesta organização/);
+    assert.deepEqual(external.rpcCalls, []);
+    for (const status of ["completed", "cancelled"]) {
+      const terminal = stageSupabase({ project: { id: uuid("9"), status } });
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: terminal.client };
+      const result = await reorderProjectStagesAction(uuid("9"), uuid("3"), "down", { status: "idle", message: "" }, new FormData());
+      assert.match(result.message, /concluídos ou cancelados/);
+      assert.deepEqual(terminal.rpcCalls, []);
+    }
+  });
+
+  it("exige autenticação, sanitiza falha da RPC e valida seu retorno", async () => {
+    const { reorderProjectStagesAction } = await import("./actions.ts");
+    currentContext = { status: "unauthenticated", supabase: {} };
+    await assert.rejects(
+      () => reorderProjectStagesAction(uuid("9"), uuid("3"), "down", { status: "idle", message: "" }, new FormData()),
+      (error: unknown) => error instanceof RedirectSignal && error.location === "/login",
+    );
+    for (const options of [
+      { rpcError: { code: "XX000", message: "private reorder detail" }, rpcData: uuid("9") },
+      { rpcError: null, rpcData: uuid("4") },
+    ]) {
+      const failed = stageSupabase(options);
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: failed.client };
+      const result = await reorderProjectStagesAction(uuid("9"), uuid("3"), "down", { status: "idle", message: "" }, new FormData());
+      assert.equal(result.status, "error");
+      assert.equal(result.message.includes("private"), false);
+      assert.deepEqual(revalidated, []);
+    }
   });
 });

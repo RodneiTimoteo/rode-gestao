@@ -7,6 +7,7 @@ export type ProjectStatus =
   | "cancelled";
 
 export type ProjectStageStatus = "pending" | "in_progress" | "completed" | "skipped";
+export type ProjectStageReorderDirection = "up" | "down";
 
 export type ProjectEventSubjectType = "project" | "stage" | "task" | "checklist_item";
 

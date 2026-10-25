@@ -4,12 +4,14 @@ import { projectStageStatusLabels, projectStageStatusStyles } from "@/features/p
 import { ProjectStageCreate } from "@/features/projects/components/project-stage-create";
 import { ProjectStageArchive } from "@/features/projects/components/project-stage-archive";
 import { ProjectStageEdit } from "@/features/projects/components/project-stage-edit";
+import { ProjectStageReorder } from "@/features/projects/components/project-stage-reorder";
 import { ProjectStageStatusActions } from "@/features/projects/components/project-stage-status-actions";
 import { formatProjectDate } from "@/features/projects/format";
 import {
   isTerminalProjectStatus,
   normalizeProgressPercent,
   projectStageResponsibleName,
+  projectStageReorderAvailability,
   projectStagesAreEmpty,
   projectTaskProgressLabel,
 } from "@/features/projects/presentation";
@@ -60,6 +62,9 @@ function StageCard({
   updateStage,
   changeStageStatus,
   archiveStage,
+  reorderStage,
+  canMoveUp,
+  canMoveDown,
 }: {
   stage: ProjectStageRecord;
   progress: ProjectStageProgress;
@@ -68,6 +73,9 @@ function StageCard({
   updateStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   changeStageStatus: (stageId: string, nextStatus: ProjectStageRecord["status"], state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   archiveStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  reorderStage: (stageId: string, direction: "up" | "down", state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   return (
     <li className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -87,6 +95,7 @@ function StageCard({
       {editable && (
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
           <ProjectStageStatusActions status={stage.status} action={changeStageStatus.bind(null, stage.id)} />
+          <ProjectStageReorder stageName={stage.name} canMoveUp={canMoveUp} canMoveDown={canMoveDown} action={reorderStage.bind(null, stage.id)} />
           <ProjectStageEdit stage={stage} members={members} action={updateStage.bind(null, stage.id)} />
           <ProjectStageArchive stageName={stage.name} action={archiveStage.bind(null, stage.id)} />
         </div>
@@ -122,6 +131,7 @@ export function ProjectStages({
   updateStage,
   changeStageStatus,
   archiveStage,
+  reorderStage,
 }: {
   result: ProjectStagesResult;
   members: CrmMember[];
@@ -130,6 +140,7 @@ export function ProjectStages({
   updateStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   changeStageStatus: (stageId: string, nextStatus: ProjectStageRecord["status"], state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   archiveStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  reorderStage: (stageId: string, direction: "up" | "down", state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   const progressByStage = new Map(result.stageProgress.map((progress) => [progress.project_stage_id, progress]));
   const terminal = isTerminalProjectStatus(projectStatus);
@@ -167,8 +178,9 @@ export function ProjectStages({
         </div>
       ) : (
         <ol className="mt-5 space-y-3">
-          {result.stages.map((stage) => (
-            <StageCard
+          {result.stages.map((stage, index) => {
+            const availability = projectStageReorderAvailability(index, result.stages.length);
+            return <StageCard
               key={stage.id}
               stage={stage}
               members={members}
@@ -176,14 +188,17 @@ export function ProjectStages({
               updateStage={updateStage}
               changeStageStatus={changeStageStatus}
               archiveStage={archiveStage}
+              reorderStage={reorderStage}
+              canMoveUp={availability.canMoveUp}
+              canMoveDown={availability.canMoveDown}
               progress={progressByStage.get(stage.id) ?? {
                 project_stage_id: stage.id,
                 eligible_tasks: 0,
                 completed_tasks: 0,
                 progress_percent: 0,
               }}
-            />
-          ))}
+            />;
+          })}
         </ol>
       )}
     </section>

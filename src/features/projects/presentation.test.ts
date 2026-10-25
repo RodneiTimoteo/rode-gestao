@@ -12,6 +12,7 @@ import {
   normalizeProgressPercent,
   projectEventActorName,
   projectStageResponsibleName,
+  projectStageReorderAvailability,
   projectStageTransitionLabel,
   projectStagesAreEmpty,
   projectTaskProgressLabel,
@@ -127,4 +128,12 @@ test("formata datas planejadas e identifica projetos somente leitura", () => {
 test("identifica o estado vazio sem inventar etapas", () => {
   assert.equal(projectStagesAreEmpty([]), true);
   assert.equal(projectStagesAreEmpty([{ id: "stage" }]), false);
+});
+
+test("habilita os controles de reordenação somente quando existe uma etapa vizinha", () => {
+  assert.deepEqual(projectStageReorderAvailability(0, 3), { canMoveUp: false, canMoveDown: true });
+  assert.deepEqual(projectStageReorderAvailability(1, 3), { canMoveUp: true, canMoveDown: true });
+  assert.deepEqual(projectStageReorderAvailability(2, 3), { canMoveUp: true, canMoveDown: false });
+  assert.deepEqual(projectStageReorderAvailability(0, 1), { canMoveUp: false, canMoveDown: false });
+  assert.deepEqual(projectStageReorderAvailability(0, 0), { canMoveUp: false, canMoveDown: false });
 });

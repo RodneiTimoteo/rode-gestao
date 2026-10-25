@@ -119,3 +119,10 @@ export function projectEventActorName(snapshot: string | null | undefined, curre
 export function projectStagesAreEmpty(stages: readonly unknown[]) {
   return stages.length === 0;
 }
+
+export function projectStageReorderAvailability(index: number, count: number) {
+  return {
+    canMoveUp: count > 1 && index > 0 && index < count,
+    canMoveDown: count > 1 && index >= 0 && index < count - 1,
+  };
+}

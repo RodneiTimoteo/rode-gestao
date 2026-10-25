@@ -6,7 +6,7 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { getCrmContext } from "@/features/crm/server/context";
 import { isUuid } from "@/features/crm/validation";
 import { getProjectStageTransitions, isProjectStageStatus } from "@/features/projects/presentation";
-import type { ProjectActionState, ProjectStageStatus, ProjectStatus } from "@/features/projects/types";
+import type { ProjectActionState, ProjectStageReorderDirection, ProjectStageStatus, ProjectStatus } from "@/features/projects/types";
 import {
   canTransitionProject,
   parseManualProjectInput,
@@ -32,6 +32,7 @@ function databaseMessage(error: PostgrestError) {
   if (error.message.includes("archived stages")) return "Etapas arquivadas não podem ser editadas.";
   if (error.message.includes("stage not found")) return "Etapa não encontrada ou sem acesso.";
   if (error.message.includes("pending tasks")) return "Conclua ou cancele todas as tarefas da etapa antes de arquivá-la.";
+  if (error.message.includes("ordered stages")) return "A ordem das etapas mudou. Atualize a página e tente novamente.";
   if (error.message.includes("deadline")) return "Revise o prazo e a justificativa informados.";
   return "Não foi possível concluir a operação agora. Tente novamente.";
 }
@@ -383,4 +384,69 @@ export async function archiveProjectStageAction(
   revalidatePath("/projetos");
   revalidatePath(`/projetos/${projectId}`);
   redirect(`/projetos/${projectId}?success=project-stage-archived`);
+}
+
+export async function reorderProjectStagesAction(
+  projectId: string,
+  stageId: string,
+  direction: ProjectStageReorderDirection,
+  _state: ProjectActionState,
+  _formData: FormData,
+): Promise<ProjectActionState> {
+  void _state;
+  void _formData;
+  const auth = await projectContext();
+  if (!auth.ok) return auth.state;
+  if (!isUuid(projectId)) return { status: "error", message: "Projeto inválido." };
+  if (!isUuid(stageId)) return { status: "error", message: "Etapa inválida." };
+  if (direction !== "up" && direction !== "down") return { status: "error", message: "Direção de reordenação inválida." };
+
+  const { data: project, error: projectError } = await auth.context.supabase
+    .from("projects")
+    .select("id, status")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError) return { status: "error", message: "Não foi possível validar o projeto agora. Tente novamente." };
+  if (!project) return { status: "error", message: "Projeto não encontrado nesta organização." };
+  if (project.status === "completed" || project.status === "cancelled") {
+    return { status: "error", message: "Projetos concluídos ou cancelados não permitem reordenar etapas." };
+  }
+
+  const activeStageIds: string[] = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data: stages, error: stagesError } = await auth.context.supabase
+      .from("project_stages")
+      .select("id")
+      .eq("organization_id", auth.context.organization.id)
+      .eq("project_id", projectId)
+      .is("archived_at", null)
+      .order("position", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (stagesError) return { status: "error", message: "Não foi possível carregar a ordem atual das etapas. Tente novamente." };
+    const page = (stages ?? []) as Array<{ id: string }>;
+    activeStageIds.push(...page.map((stage) => stage.id));
+    if (page.length < pageSize) break;
+  }
+
+  const currentIndex = activeStageIds.indexOf(stageId);
+  if (currentIndex < 0) return { status: "error", message: "Etapa não encontrada na lista ativa deste projeto." };
+  if (activeStageIds.length === 1) return { status: "error", message: "A única etapa do projeto não pode ser reordenada." };
+  if (direction === "up" && currentIndex === 0) return { status: "error", message: "A primeira etapa já está no início da lista." };
+  if (direction === "down" && currentIndex === activeStageIds.length - 1) return { status: "error", message: "A última etapa já está no fim da lista." };
+
+  const neighborIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  [activeStageIds[currentIndex], activeStageIds[neighborIndex]] = [activeStageIds[neighborIndex], activeStageIds[currentIndex]];
+
+  const { data, error } = await auth.context.supabase.rpc("reorder_project_stages", {
+    target_project_id: projectId,
+    ordered_stage_ids: activeStageIds,
+  });
+  if (error) return { status: "error", message: databaseMessage(error) };
+  if (String(data) !== projectId) return { status: "error", message: "O banco não confirmou a reordenação do projeto." };
+
+  revalidatePath("/projetos");
+  revalidatePath(`/projetos/${projectId}`);
+  return { status: "success", message: "Ordem das etapas atualizada com sucesso." };
 }
