@@ -1,5 +1,7 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { getCrmMembers } from "@/features/crm/server/queries";
+import { isUuid } from "@/features/crm/validation";
+import { projectEventActorName } from "@/features/projects/presentation";
 import type {
   ApprovedProposalChoice,
   ProjectDetails,
@@ -8,10 +10,15 @@ import type {
   ProjectIndicators,
   ProjectListItem,
   ProjectListResult,
+  ProjectEventSubjectType,
   ProjectRecord,
+  ProjectStageProgress,
+  ProjectStageRecord,
+  ProjectStagesResult,
 } from "@/features/projects/types";
 
 const projectColumns = "id, organization_id, client_id, proposal_id, name, description, status, owner_user_id, start_date, original_expected_end_date, expected_end_date, completed_at, contracted_amount, proposal_snapshot, created_by, created_at, updated_at";
+const projectStageColumns = "id, organization_id, project_id, name, description, position, status, responsible_user_id, planned_start_date, planned_end_date, started_at, completed_at, archived_at, created_at, updated_at";
 
 function safeSearch(value: string) {
   return value.replace(/[^\p{L}\p{N}\s.-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80);
@@ -126,7 +133,7 @@ export async function getProjectById(
   const project = data as ProjectRecord;
   const [lookups, eventsResult, proposalResult] = await Promise.all([
     projectLookups(supabase, organizationId, [project], currentUser),
-    supabase.from("project_events").select("id, event_type, actor_user_id, description, event_data, justification, occurred_at").eq("organization_id", organizationId).eq("project_id", projectId).order("occurred_at", { ascending: false }),
+    supabase.from("project_events").select("id, event_type, actor_user_id, actor_name_snapshot, description, event_data, justification, subject_type, subject_id, occurred_at").eq("organization_id", organizationId).eq("project_id", projectId).order("occurred_at", { ascending: false }),
     project.proposal_id
       ? supabase.from("proposals").select("id, code, revision_number, title").eq("organization_id", organizationId).eq("id", project.proposal_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -142,7 +149,53 @@ export async function getProjectById(
       ...event,
       event_type: event.event_type as ProjectEvent["event_type"],
       event_data: (event.event_data ?? {}) as Record<string, unknown>,
-      actorName: actorNames.get(event.actor_user_id) ?? "Membro indisponível",
+      actor_name_snapshot: event.actor_name_snapshot ?? null,
+      actorName: projectEventActorName(event.actor_name_snapshot, actorNames.get(event.actor_user_id)),
+      subject_type: (event.subject_type ?? "project") as ProjectEventSubjectType,
+      subject_id: event.subject_id ?? projectId,
     })),
+  };
+}
+
+export async function getProjectStages(
+  supabase: SupabaseClient,
+  organizationId: string,
+  projectId: string,
+): Promise<ProjectStagesResult> {
+  if (!isUuid(projectId)) throw new Error("Projeto inválido.");
+
+  const [stagesResult, stageProgressResult, projectProgressResult] = await Promise.all([
+    supabase
+      .from("project_stages")
+      .select(projectStageColumns)
+      .eq("organization_id", organizationId)
+      .eq("project_id", projectId)
+      .is("archived_at", null)
+      .order("position", { ascending: true }),
+    supabase
+      .from("project_stage_progress")
+      .select("project_stage_id, eligible_tasks, completed_tasks, progress_percent")
+      .eq("organization_id", organizationId)
+      .eq("project_id", projectId),
+    supabase
+      .from("project_progress")
+      .select("eligible_tasks, completed_tasks, progress_percent")
+      .eq("organization_id", organizationId)
+      .eq("project_id", projectId)
+      .maybeSingle(),
+  ]);
+
+  if (stagesResult.error || stageProgressResult.error || projectProgressResult.error) {
+    throw new Error("Não foi possível carregar as etapas do projeto.");
+  }
+
+  return {
+    stages: (stagesResult.data ?? []) as ProjectStageRecord[],
+    stageProgress: (stageProgressResult.data ?? []) as ProjectStageProgress[],
+    projectProgress: projectProgressResult.data ?? {
+      eligible_tasks: 0,
+      completed_tasks: 0,
+      progress_percent: 0,
+    },
   };
 }

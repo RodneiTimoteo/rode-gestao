@@ -1,4 +1,4 @@
-import type { ProjectEventType, ProjectStatus } from "@/features/projects/types";
+import type { ProjectEventType, ProjectStageStatus, ProjectStatus } from "@/features/projects/types";
 
 export const projectStatuses: ProjectStatus[] = [
   "planning",
@@ -26,6 +26,24 @@ export const projectEventLabels: Record<ProjectEventType, string> = {
   deadline_changed: "Prazo de entrega alterado",
   completed: "Projeto concluído",
   cancelled: "Projeto cancelado",
+  stage_created: "Etapa criada",
+  stage_updated: "Etapa alterada",
+  stage_reordered: "Etapas reordenadas",
+  stage_archived: "Etapa arquivada",
+};
+
+export const projectStageStatusLabels: Record<ProjectStageStatus, string> = {
+  pending: "Pendente",
+  in_progress: "Em andamento",
+  completed: "Concluída",
+  skipped: "Pulada",
+};
+
+export const projectStageStatusStyles: Record<ProjectStageStatus, string> = {
+  pending: "bg-soft text-muted",
+  in_progress: "bg-brand-soft text-brand",
+  completed: "bg-positive-soft text-positive",
+  skipped: "bg-warning-soft text-warning",
 };
 
 export const projectStatusStyles: Record<ProjectStatus, string> = {

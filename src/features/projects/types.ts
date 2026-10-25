@@ -6,6 +6,10 @@ export type ProjectStatus =
   | "completed"
   | "cancelled";
 
+export type ProjectStageStatus = "pending" | "in_progress" | "completed" | "skipped";
+
+export type ProjectEventSubjectType = "project" | "stage" | "task" | "checklist_item";
+
 export type ProjectEventType =
   | "created"
   | "created_from_proposal"
@@ -13,7 +17,11 @@ export type ProjectEventType =
   | "owner_changed"
   | "deadline_changed"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "stage_created"
+  | "stage_updated"
+  | "stage_reordered"
+  | "stage_archived";
 
 export type ProjectActionState = {
   status: "idle" | "success" | "error";
@@ -74,11 +82,51 @@ export type ProjectEvent = {
   id: string;
   event_type: ProjectEventType;
   actor_user_id: string;
+  actor_name_snapshot: string | null;
   actorName: string;
   description: string;
   event_data: Record<string, unknown>;
   justification: string | null;
+  subject_type: ProjectEventSubjectType;
+  subject_id: string;
   occurred_at: string;
+};
+
+export type ProjectStageRecord = {
+  id: string;
+  organization_id: string;
+  project_id: string;
+  name: string;
+  description: string | null;
+  position: number;
+  status: ProjectStageStatus;
+  responsible_user_id: string | null;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectStageProgress = {
+  project_stage_id: string;
+  eligible_tasks: number;
+  completed_tasks: number;
+  progress_percent: number;
+};
+
+export type ProjectProgress = {
+  eligible_tasks: number;
+  completed_tasks: number;
+  progress_percent: number;
+};
+
+export type ProjectStagesResult = {
+  stages: ProjectStageRecord[];
+  stageProgress: ProjectStageProgress[];
+  projectProgress: ProjectProgress;
 };
 
 export type ProjectDetails = ProjectListItem & {

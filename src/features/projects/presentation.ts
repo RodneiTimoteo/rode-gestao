@@ -1,4 +1,5 @@
 import { projectStatusLabels, projectStatuses } from "@/features/projects/constants";
+import type { CrmMember } from "@/features/crm/types";
 import type { ProjectStatus } from "@/features/projects/types";
 
 const statusCodePattern = new RegExp(
@@ -52,4 +53,32 @@ export function projectTransitionActionLabel(currentStatus: ProjectStatus, nextS
   };
 
   return labels[nextStatus] ?? projectStatusLabels[nextStatus];
+}
+
+export function normalizeProgressPercent(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+export function projectTaskProgressLabel(completed: number, eligible: number) {
+  const safeCompleted = Math.max(0, Math.trunc(completed));
+  const safeEligible = Math.max(0, Math.trunc(eligible));
+  return `${safeCompleted} de ${safeEligible} ${safeEligible === 1 ? "tarefa concluída" : "tarefas concluídas"}`;
+}
+
+export function projectStageResponsibleName(responsibleUserId: string | null, members: CrmMember[]) {
+  if (!responsibleUserId) return "Não atribuído";
+  return members.find((member) => member.userId === responsibleUserId)?.displayName ?? "Membro indisponível";
+}
+
+export function isTerminalProjectStatus(status: ProjectStatus) {
+  return status === "completed" || status === "cancelled";
+}
+
+export function projectEventActorName(snapshot: string | null | undefined, currentName?: string) {
+  return snapshot?.trim() || currentName?.trim() || "Membro indisponível";
+}
+
+export function projectStagesAreEmpty(stages: readonly unknown[]) {
+  return stages.length === 0;
 }

@@ -10,7 +10,7 @@
     "test:crm": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/features/crm/validation.test.ts",
     "test:proposals": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/features/proposals/validation.test.ts",
     "test:proposals-server": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --experimental-test-module-mocks --import ./src/test/register-aliases.mjs --test src/features/proposals/server-actions.test.ts src/features/proposals/server/queries.test.ts src/app/api/proposals/attachments-routes.test.ts",
-    "test:projects": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --experimental-test-module-mocks --import ./src/test/register-aliases.mjs --test src/features/projects/validation.test.ts src/features/projects/presentation.test.ts src/features/projects/server-actions.test.ts",
+    "test:projects": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --experimental-test-module-mocks --import ./src/test/register-aliases.mjs --test src/features/projects/validation.test.ts src/features/projects/presentation.test.ts src/features/projects/server-actions.test.ts src/features/projects/server/queries.test.ts",
     "test": "npm run test:crm && npm run test:proposals && npm run test:proposals-server && npm run test:projects"
   },
   "dependencies": {
