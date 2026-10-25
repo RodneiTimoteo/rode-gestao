@@ -2,6 +2,7 @@ import { Icon } from "@/components/ui/icon";
 import type { CrmMember } from "@/features/crm/types";
 import { projectStageStatusLabels, projectStageStatusStyles } from "@/features/projects/constants";
 import { ProjectStageCreate } from "@/features/projects/components/project-stage-create";
+import { ProjectStageArchive } from "@/features/projects/components/project-stage-archive";
 import { ProjectStageEdit } from "@/features/projects/components/project-stage-edit";
 import { ProjectStageStatusActions } from "@/features/projects/components/project-stage-status-actions";
 import { formatProjectDate } from "@/features/projects/format";
@@ -58,6 +59,7 @@ function StageCard({
   editable,
   updateStage,
   changeStageStatus,
+  archiveStage,
 }: {
   stage: ProjectStageRecord;
   progress: ProjectStageProgress;
@@ -65,6 +67,7 @@ function StageCard({
   editable: boolean;
   updateStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   changeStageStatus: (stageId: string, nextStatus: ProjectStageRecord["status"], state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  archiveStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   return (
     <li className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -85,6 +88,7 @@ function StageCard({
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
           <ProjectStageStatusActions status={stage.status} action={changeStageStatus.bind(null, stage.id)} />
           <ProjectStageEdit stage={stage} members={members} action={updateStage.bind(null, stage.id)} />
+          <ProjectStageArchive stageName={stage.name} action={archiveStage.bind(null, stage.id)} />
         </div>
       )}
 
@@ -117,6 +121,7 @@ export function ProjectStages({
   createStage,
   updateStage,
   changeStageStatus,
+  archiveStage,
 }: {
   result: ProjectStagesResult;
   members: CrmMember[];
@@ -124,6 +129,7 @@ export function ProjectStages({
   createStage: (state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   updateStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   changeStageStatus: (stageId: string, nextStatus: ProjectStageRecord["status"], state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  archiveStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   const progressByStage = new Map(result.stageProgress.map((progress) => [progress.project_stage_id, progress]));
   const terminal = isTerminalProjectStatus(projectStatus);
@@ -169,6 +175,7 @@ export function ProjectStages({
               editable={!terminal}
               updateStage={updateStage}
               changeStageStatus={changeStageStatus}
+              archiveStage={archiveStage}
               progress={progressByStage.get(stage.id) ?? {
                 project_stage_id: stage.id,
                 eligible_tasks: 0,

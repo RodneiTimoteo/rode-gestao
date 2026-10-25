@@ -31,6 +31,7 @@ function databaseMessage(error: PostgrestError) {
   if (error.message.includes("stage responsible")) return "O responsável deve ser um membro ativo desta organização.";
   if (error.message.includes("archived stages")) return "Etapas arquivadas não podem ser editadas.";
   if (error.message.includes("stage not found")) return "Etapa não encontrada ou sem acesso.";
+  if (error.message.includes("pending tasks")) return "Conclua ou cancele todas as tarefas da etapa antes de arquivá-la.";
   if (error.message.includes("deadline")) return "Revise o prazo e a justificativa informados.";
   return "Não foi possível concluir a operação agora. Tente novamente.";
 }
@@ -322,4 +323,64 @@ export async function changeProjectStageStatusAction(
   revalidatePath("/projetos");
   revalidatePath(`/projetos/${projectId}`);
   return { status: "success", message: "Situação da etapa atualizada com sucesso." };
+}
+
+export async function archiveProjectStageAction(
+  projectId: string,
+  stageId: string,
+  _state: ProjectActionState,
+  formData: FormData,
+): Promise<ProjectActionState> {
+  const auth = await projectContext();
+  if (!auth.ok) return auth.state;
+  if (!isUuid(projectId)) return { status: "error", message: "Projeto inválido." };
+  if (!isUuid(stageId)) return { status: "error", message: "Etapa inválida." };
+  if (formData.get("confirmation") !== "archive-project-stage") {
+    return { status: "error", message: "Confirme explicitamente o arquivamento da etapa." };
+  }
+
+  const { data: project, error: projectError } = await auth.context.supabase
+    .from("projects")
+    .select("id, status")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError) return { status: "error", message: "Não foi possível validar o projeto agora. Tente novamente." };
+  if (!project) return { status: "error", message: "Projeto não encontrado nesta organização." };
+  if (project.status === "completed" || project.status === "cancelled") {
+    return { status: "error", message: "Projetos concluídos ou cancelados não permitem arquivar etapas." };
+  }
+
+  const { data: stage, error: stageError } = await auth.context.supabase
+    .from("project_stages")
+    .select("id, archived_at")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("project_id", projectId)
+    .eq("id", stageId)
+    .maybeSingle();
+  if (stageError) return { status: "error", message: "Não foi possível validar a etapa agora. Tente novamente." };
+  if (!stage) return { status: "error", message: "Etapa não encontrada neste projeto." };
+  if (stage.archived_at) return { status: "error", message: "Esta etapa já está arquivada." };
+
+  const { data: pendingTask, error: taskError } = await auth.context.supabase
+    .from("project_tasks")
+    .select("id")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("project_id", projectId)
+    .eq("project_stage_id", stageId)
+    .not("status", "in", "(done,cancelled)")
+    .limit(1)
+    .maybeSingle();
+  if (taskError) return { status: "error", message: "Não foi possível verificar as tarefas da etapa agora. Tente novamente." };
+  if (pendingTask) {
+    return { status: "error", message: "Conclua ou cancele todas as tarefas da etapa antes de arquivá-la." };
+  }
+
+  const { data, error } = await auth.context.supabase.rpc("archive_project_stage", { target_stage_id: stageId });
+  if (error) return { status: "error", message: databaseMessage(error) };
+  if (String(data) !== stageId) return { status: "error", message: "O banco não retornou uma etapa válida." };
+
+  revalidatePath("/projetos");
+  revalidatePath(`/projetos/${projectId}`);
+  redirect(`/projetos/${projectId}?success=project-stage-archived`);
 }

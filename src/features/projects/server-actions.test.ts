@@ -51,6 +51,12 @@ function validStageUpdateForm() {
   return data;
 }
 
+function archiveStageForm() {
+  const data = new FormData();
+  data.set("confirmation", "archive-project-stage");
+  return data;
+}
+
 function stageSupabase(options: {
   project?: { id: string; status: string } | null;
   member?: { user_id: string } | null;
@@ -66,6 +72,7 @@ function stageSupabase(options: {
     planned_end_date?: string | null;
   } | null;
   rpcError?: { code: string; message: string } | null;
+  pendingTask?: { id: string } | null;
 } = {}) {
   const fromCalls: Array<{ table: string; filters: Record<string, unknown> }> = [];
   const rpcCalls: Array<[string, Record<string, unknown>]> = [];
@@ -84,6 +91,7 @@ function stageSupabase(options: {
         planned_end_date: "2026-10-31",
       }
     : options.stage;
+  const pendingTask = options.pendingTask === undefined ? null : options.pendingTask;
   return {
     fromCalls,
     rpcCalls,
@@ -94,10 +102,13 @@ function stageSupabase(options: {
         const query = {
           select() { return query; },
           eq(column: string, value: unknown) { call.filters[column] = value; return query; },
+          not(column: string, operator: string, value: unknown) { call.filters[`not:${column}`] = `${operator}:${String(value)}`; return query; },
+          limit(value: number) { call.filters.limit = value; return query; },
           async maybeSingle() {
             if (table === "projects") return { data: project, error: null };
             if (table === "organization_members") return { data: member, error: null };
             if (table === "project_stages") return { data: stage, error: null };
+            if (table === "project_tasks") return { data: pendingTask, error: null };
             return { data: null, error: null };
           },
         };
@@ -474,6 +485,95 @@ describe("Server Actions de projetos com Supabase mockado", () => {
     const failed = stageSupabase({ rpcError: { code: "XX000", message: "private database detail" } });
     currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: failed.client };
     const failedResult = await changeProjectStageStatusAction(uuid("9"), uuid("4"), "completed", { status: "idle", message: "" }, new FormData());
+    assert.equal(failedResult.message, "Não foi possível concluir a operação agora. Tente novamente.");
+    assert.equal(failedResult.message.includes("private"), false);
+    assert.deepEqual(revalidated, []);
+  });
+
+  it("arquiva etapa sem tarefas após confirmação e registra o histórico somente pela RPC", async () => {
+    const supabase = stageSupabase({ pendingTask: null });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+    const { archiveProjectStageAction } = await import("./actions.ts");
+    await assert.rejects(
+      () => archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, archiveStageForm()),
+      (error: unknown) => error instanceof RedirectSignal && error.location === `/projetos/${uuid("9")}?success=project-stage-archived`,
+    );
+    assert.deepEqual(supabase.rpcCalls, [["archive_project_stage", { target_stage_id: uuid("4") }]]);
+    assert.equal(supabase.fromCalls.some((call) => call.table === "project_events"), false);
+    assert.deepEqual(supabase.fromCalls.at(-1), {
+      table: "project_tasks",
+      filters: {
+        organization_id: uuid("8"), project_id: uuid("9"), project_stage_id: uuid("4"),
+        "not:status": "in:(done,cancelled)", limit: 1,
+      },
+    });
+    assert.deepEqual(revalidated, ["/projetos", `/projetos/${uuid("9")}`]);
+  });
+
+  it("permite arquivar quando todas as tarefas estão concluídas ou canceladas", async () => {
+    const supabase = stageSupabase({ pendingTask: null });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+    const { archiveProjectStageAction } = await import("./actions.ts");
+    await assert.rejects(
+      () => archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, archiveStageForm()),
+      (error: unknown) => error instanceof RedirectSignal,
+    );
+    assert.deepEqual(supabase.rpcCalls.map(([name]) => name), ["archive_project_stage"]);
+  });
+
+  it("exige confirmação explícita e bloqueia tarefas pendentes", async () => {
+    const { archiveProjectStageAction } = await import("./actions.ts");
+    const unconfirmed = stageSupabase();
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: unconfirmed.client };
+    const unconfirmedResult = await archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, new FormData());
+    assert.match(unconfirmedResult.message, /Confirme explicitamente/);
+    assert.deepEqual(unconfirmed.fromCalls, []);
+    assert.deepEqual(unconfirmed.rpcCalls, []);
+
+    const pending = stageSupabase({ pendingTask: { id: uuid("5") } });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: pending.client };
+    const pendingResult = await archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, archiveStageForm());
+    assert.match(pendingResult.message, /Conclua ou cancele/);
+    assert.deepEqual(pending.rpcCalls, []);
+  });
+
+  it("rejeita etapa já arquivada ou fora da organização", async () => {
+    const { archiveProjectStageAction } = await import("./actions.ts");
+    const archived = stageSupabase({ stage: { id: uuid("4"), status: "completed", archived_at: "2026-10-25T15:00:00.000Z", updated_at: "2026-10-25T15:00:00.000Z" } });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: archived.client };
+    const archivedResult = await archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, archiveStageForm());
+    assert.match(archivedResult.message, /já está arquivada/);
+    assert.deepEqual(archived.rpcCalls, []);
+
+    const external = stageSupabase({ stage: null });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: external.client };
+    const externalResult = await archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, archiveStageForm());
+    assert.match(externalResult.message, /não encontrada/);
+    assert.deepEqual(external.rpcCalls, []);
+  });
+
+  it("bloqueia arquivamento em projetos concluídos e cancelados", async () => {
+    const { archiveProjectStageAction } = await import("./actions.ts");
+    for (const status of ["completed", "cancelled"]) {
+      const supabase = stageSupabase({ project: { id: uuid("9"), status } });
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+      const result = await archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, archiveStageForm());
+      assert.match(result.message, /concluídos ou cancelados/);
+      assert.deepEqual(supabase.rpcCalls, []);
+    }
+  });
+
+  it("exige autenticação e sanitiza erros da RPC de arquivamento", async () => {
+    const { archiveProjectStageAction } = await import("./actions.ts");
+    currentContext = { status: "unauthenticated", supabase: {} };
+    await assert.rejects(
+      () => archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, archiveStageForm()),
+      (error: unknown) => error instanceof RedirectSignal && error.location === "/login",
+    );
+
+    const failed = stageSupabase({ rpcError: { code: "XX000", message: "private archive detail" } });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: failed.client };
+    const failedResult = await archiveProjectStageAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, archiveStageForm());
     assert.equal(failedResult.message, "Não foi possível concluir a operação agora. Tente novamente.");
     assert.equal(failedResult.message.includes("private"), false);
     assert.deepEqual(revalidated, []);
