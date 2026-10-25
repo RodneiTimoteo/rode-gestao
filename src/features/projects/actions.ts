@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { getCrmContext } from "@/features/crm/server/context";
 import { isUuid } from "@/features/crm/validation";
-import type { ProjectActionState, ProjectStatus } from "@/features/projects/types";
+import { getProjectStageTransitions, isProjectStageStatus } from "@/features/projects/presentation";
+import type { ProjectActionState, ProjectStageStatus, ProjectStatus } from "@/features/projects/types";
 import {
   canTransitionProject,
   parseManualProjectInput,
@@ -23,6 +24,7 @@ function databaseMessage(error: PostgrestError) {
   if (error.message.includes("active member")) return "O responsável deve ser um membro ativo desta organização.";
   if (error.message.includes("terminal projects")) return "Projetos concluídos ou cancelados não podem ser alterados.";
   if (error.message.includes("invalid project status transition")) return "Esta mudança de situação não é permitida.";
+  if (error.message.includes("invalid stage status")) return "Esta mudança de situação da etapa não é permitida.";
   if (error.message.includes("stage name")) return "Informe um nome válido para a etapa.";
   if (error.message.includes("stage description")) return "A descrição da etapa é muito longa.";
   if (error.message.includes("stage deadline")) return "A data final não pode ser anterior à data inicial.";
@@ -261,4 +263,63 @@ export async function updateProjectStageAction(projectId: string, stageId: strin
   revalidatePath("/projetos");
   revalidatePath(`/projetos/${projectId}`);
   return { status: "success", message: "Etapa atualizada com sucesso." };
+}
+
+export async function changeProjectStageStatusAction(
+  projectId: string,
+  stageId: string,
+  nextStatus: ProjectStageStatus,
+  _state: ProjectActionState,
+  _formData: FormData,
+): Promise<ProjectActionState> {
+  void _state;
+  void _formData;
+  const auth = await projectContext();
+  if (!auth.ok) return auth.state;
+  if (!isUuid(projectId)) return { status: "error", message: "Projeto inválido." };
+  if (!isUuid(stageId)) return { status: "error", message: "Etapa inválida." };
+  if (!isProjectStageStatus(nextStatus)) return { status: "error", message: "Selecione uma situação válida para a etapa." };
+
+  const { data: project, error: projectError } = await auth.context.supabase
+    .from("projects")
+    .select("id, status")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError) return { status: "error", message: "Não foi possível validar o projeto agora. Tente novamente." };
+  if (!project) return { status: "error", message: "Projeto não encontrado nesta organização." };
+  if (project.status === "completed" || project.status === "cancelled") {
+    return { status: "error", message: "Projetos concluídos ou cancelados não permitem alterar etapas." };
+  }
+
+  const { data: stage, error: stageError } = await auth.context.supabase
+    .from("project_stages")
+    .select("id, name, description, status, responsible_user_id, planned_start_date, planned_end_date, archived_at")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("project_id", projectId)
+    .eq("id", stageId)
+    .maybeSingle();
+  if (stageError) return { status: "error", message: "Não foi possível validar a etapa agora. Tente novamente." };
+  if (!stage) return { status: "error", message: "Etapa não encontrada neste projeto." };
+  if (stage.archived_at) return { status: "error", message: "Etapas arquivadas não podem ser alteradas." };
+  if (!isProjectStageStatus(stage.status)) return { status: "error", message: "A etapa possui uma situação inválida." };
+  if (!getProjectStageTransitions(stage.status).includes(nextStatus)) {
+    return { status: "error", message: "Esta mudança de situação da etapa não é permitida." };
+  }
+
+  const { data, error } = await auth.context.supabase.rpc("update_project_stage", {
+    target_stage_id: stageId,
+    target_name: stage.name,
+    target_description: stage.description,
+    target_status: nextStatus,
+    target_responsible_user_id: stage.responsible_user_id,
+    target_planned_start_date: stage.planned_start_date,
+    target_planned_end_date: stage.planned_end_date,
+  });
+  if (error) return { status: "error", message: databaseMessage(error) };
+  if (String(data) !== stageId) return { status: "error", message: "O banco não retornou uma etapa válida." };
+
+  revalidatePath("/projetos");
+  revalidatePath(`/projetos/${projectId}`);
+  return { status: "success", message: "Situação da etapa atualizada com sucesso." };
 }

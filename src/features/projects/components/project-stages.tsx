@@ -3,6 +3,7 @@ import type { CrmMember } from "@/features/crm/types";
 import { projectStageStatusLabels, projectStageStatusStyles } from "@/features/projects/constants";
 import { ProjectStageCreate } from "@/features/projects/components/project-stage-create";
 import { ProjectStageEdit } from "@/features/projects/components/project-stage-edit";
+import { ProjectStageStatusActions } from "@/features/projects/components/project-stage-status-actions";
 import { formatProjectDate } from "@/features/projects/format";
 import {
   isTerminalProjectStatus,
@@ -56,12 +57,14 @@ function StageCard({
   members,
   editable,
   updateStage,
+  changeStageStatus,
 }: {
   stage: ProjectStageRecord;
   progress: ProjectStageProgress;
   members: CrmMember[];
   editable: boolean;
   updateStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  changeStageStatus: (stageId: string, nextStatus: ProjectStageRecord["status"], state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   return (
     <li className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -78,7 +81,12 @@ function StageCard({
         <StageStatusBadge status={stage.status} />
       </div>
 
-      {editable && <div className="mt-3 flex justify-end"><ProjectStageEdit stage={stage} members={members} action={updateStage.bind(null, stage.id)} /></div>}
+      {editable && (
+        <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+          <ProjectStageStatusActions status={stage.status} action={changeStageStatus.bind(null, stage.id)} />
+          <ProjectStageEdit stage={stage} members={members} action={updateStage.bind(null, stage.id)} />
+        </div>
+      )}
 
       <dl className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-3">
         <div>
@@ -108,12 +116,14 @@ export function ProjectStages({
   projectStatus,
   createStage,
   updateStage,
+  changeStageStatus,
 }: {
   result: ProjectStagesResult;
   members: CrmMember[];
   projectStatus: ProjectStatus;
   createStage: (state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   updateStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  changeStageStatus: (stageId: string, nextStatus: ProjectStageRecord["status"], state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   const progressByStage = new Map(result.stageProgress.map((progress) => [progress.project_stage_id, progress]));
   const terminal = isTerminalProjectStatus(projectStatus);
@@ -158,6 +168,7 @@ export function ProjectStages({
               members={members}
               editable={!terminal}
               updateStage={updateStage}
+              changeStageStatus={changeStageStatus}
               progress={progressByStage.get(stage.id) ?? {
                 project_stage_id: stage.id,
                 eligible_tasks: 0,

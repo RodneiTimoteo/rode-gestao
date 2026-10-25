@@ -4,11 +4,15 @@ import { projectEventLabels, projectStageStatusLabels } from "./constants.ts";
 import { formatProjectDate } from "./format.ts";
 import {
   getProjectDeadlineEventDetails,
+  getProjectStageStatusEventDetails,
+  getProjectStageTransitions,
   getProjectStatusEventDetails,
+  isProjectStageStatus,
   isTerminalProjectStatus,
   normalizeProgressPercent,
   projectEventActorName,
   projectStageResponsibleName,
+  projectStageTransitionLabel,
   projectStagesAreEmpty,
   projectTaskProgressLabel,
   projectTransitionActionLabel,
@@ -61,6 +65,26 @@ test("apresenta os quatro estados operacionais das etapas", () => {
     completed: "Concluída",
     skipped: "Pulada",
   });
+});
+
+test("oferece somente as transições permitidas com rótulos claros", () => {
+  assert.deepEqual(getProjectStageTransitions("pending"), ["in_progress", "skipped"]);
+  assert.deepEqual(getProjectStageTransitions("in_progress"), ["pending", "completed", "skipped"]);
+  assert.deepEqual(getProjectStageTransitions("completed"), ["in_progress"]);
+  assert.deepEqual(getProjectStageTransitions("skipped"), ["pending"]);
+  assert.equal(projectStageTransitionLabel("pending", "in_progress"), "Iniciar etapa");
+  assert.equal(projectStageTransitionLabel("completed", "in_progress"), "Reabrir etapa");
+  assert.equal(projectStageTransitionLabel("skipped", "pending"), "Reativar como pendente");
+  assert.equal(isProjectStageStatus(null), false);
+  assert.equal(isProjectStageStatus("unknown"), false);
+});
+
+test("traduz a mudança de situação registrada no evento stage_updated", () => {
+  assert.deepEqual(getProjectStageStatusEventDetails({
+    from: { status: "in_progress", name: "Execução" },
+    to: { status: "completed", name: "Execução" },
+  }), { from: "Em andamento", to: "Concluída" });
+  assert.deepEqual(getProjectStageStatusEventDetails({ from: null, to: { status: "unknown" } }), { from: null, to: null });
 });
 
 test("reconhece os eventos de etapa sem alterar os rótulos anteriores", () => {

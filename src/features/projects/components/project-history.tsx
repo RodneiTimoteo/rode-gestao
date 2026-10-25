@@ -2,6 +2,7 @@ import { projectEventLabels } from "@/features/projects/constants";
 import { formatProjectDate } from "@/features/projects/format";
 import {
   getProjectDeadlineEventDetails,
+  getProjectStageStatusEventDetails,
   getProjectStatusEventDetails,
   translateProjectStatusDescription,
 } from "@/features/projects/presentation";
@@ -23,6 +24,13 @@ function ChangeDetails({ from, to }: { from: string; to: string }) {
 }
 
 function EventContent({ event }: { event: ProjectEvent }) {
+  if (event.event_type === "stage_updated") {
+    const status = getProjectStageStatusEventDetails(event.event_data);
+    if (status.from && status.to && status.from !== status.to) {
+      return <ChangeDetails from={status.from} to={status.to} />;
+    }
+  }
+
   if (event.event_type === "deadline_changed") {
     const deadline = getProjectDeadlineEventDetails(event.event_data);
     return (

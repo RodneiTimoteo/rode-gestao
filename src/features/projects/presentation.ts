@@ -1,6 +1,13 @@
-import { projectStatusLabels, projectStatuses } from "@/features/projects/constants";
+import { projectStageStatusLabels, projectStatusLabels, projectStatuses } from "@/features/projects/constants";
 import type { CrmMember } from "@/features/crm/types";
-import type { ProjectStatus } from "@/features/projects/types";
+import type { ProjectStageStatus, ProjectStatus } from "@/features/projects/types";
+
+const projectStageTransitions: Record<ProjectStageStatus, ProjectStageStatus[]> = {
+  pending: ["in_progress", "skipped"],
+  in_progress: ["pending", "completed", "skipped"],
+  completed: ["in_progress"],
+  skipped: ["pending"],
+};
 
 const statusCodePattern = new RegExp(
   `\\b(${[...projectStatuses].sort((left, right) => right.length - left.length).join("|")})\\b`,
@@ -17,6 +24,36 @@ function eventText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
   return normalized || null;
+}
+
+export function isProjectStageStatus(value: unknown): value is ProjectStageStatus {
+  return typeof value === "string" && Object.hasOwn(projectStageTransitions, value);
+}
+
+export function getProjectStageTransitions(status: ProjectStageStatus) {
+  return [...projectStageTransitions[status]];
+}
+
+export function projectStageTransitionLabel(from: ProjectStageStatus, to: ProjectStageStatus) {
+  if (to === "in_progress") return from === "completed" ? "Reabrir etapa" : "Iniciar etapa";
+  if (to === "pending") return from === "skipped" ? "Reativar como pendente" : "Voltar para pendente";
+  if (to === "completed") return "Concluir etapa";
+  return "Pular etapa";
+}
+
+export function getProjectStageStatusEventDetails(eventData: Record<string, unknown>) {
+  const fromData = eventData.from;
+  const toData = eventData.to;
+  const fromStatus = typeof fromData === "object" && fromData !== null && "status" in fromData
+    ? (fromData as Record<string, unknown>).status
+    : null;
+  const toStatus = typeof toData === "object" && toData !== null && "status" in toData
+    ? (toData as Record<string, unknown>).status
+    : null;
+  return {
+    from: isProjectStageStatus(fromStatus) ? projectStageStatusLabels[fromStatus] : null,
+    to: isProjectStageStatus(toStatus) ? projectStageStatusLabels[toStatus] : null,
+  };
 }
 
 export function translateProjectStatusDescription(description: string) {
