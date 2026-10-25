@@ -1,3 +1,6 @@
+"use client";
+
+import { useId, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import type { CrmMember } from "@/features/crm/types";
 import { projectStageStatusLabels, projectStageStatusStyles } from "@/features/projects/constants";
@@ -68,6 +71,7 @@ function StageCard({
   canMoveUp,
   canMoveDown,
   tasks,
+  createTask,
 }: {
   stage: ProjectStageRecord;
   progress: ProjectStageProgress;
@@ -80,50 +84,70 @@ function StageCard({
   canMoveUp: boolean;
   canMoveDown: boolean;
   tasks: ProjectStagesResult["tasks"];
+  createTask: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
+  const [expanded, setExpanded] = useState(true);
+  const contentId = useId();
+  const percent = normalizeProgressPercent(progress.progress_percent);
+
   return (
-    <li className="rounded-xl border border-line bg-surface p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-xs font-semibold text-brand" aria-label={`Posição ${stage.position}`}>
-              {stage.position}
-            </span>
-            <h3 className="break-words text-sm font-semibold text-strong sm:text-base">{stage.name}</h3>
+    <li className="overflow-hidden rounded-2xl border border-brand/35 bg-surface">
+      <div className="flex min-h-16 flex-wrap items-center gap-3 bg-brand px-4 py-3 text-on-brand sm:px-5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full border border-on-brand/45 text-sm font-semibold" aria-label={`Posição ${stage.position}`}>
+          {stage.position}
+        </span>
+        <h3 className="min-w-0 flex-1 break-words text-base font-semibold tracking-[-0.015em] sm:text-lg">{stage.name}</h3>
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+          <StageStatusBadge status={stage.status} />
+          <span className="hidden text-xs font-semibold text-on-brand/80 sm:inline">{percent}%</span>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={contentId}
+            aria-label={`${expanded ? "Recolher" : "Expandir"} etapa ${stage.name}`}
+            onClick={() => setExpanded((current) => !current)}
+            className="grid size-9 place-items-center rounded-lg border border-on-brand/30 text-on-brand outline-none hover:bg-on-brand/10 focus-visible:ring-4 focus-visible:ring-on-brand/25"
+          >
+            <Icon name="chevronRight" className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      <div id={contentId} hidden={!expanded}>
+        <div className="px-4 pb-5 pt-4 sm:px-5">
+          {stage.description && <p className="max-w-3xl whitespace-pre-wrap text-sm leading-6 text-muted">{stage.description}</p>}
+
+          <div className={`${stage.description ? "mt-4" : ""} grid gap-4 border-y border-line/70 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.42fr)] lg:items-center`}>
+            <dl className="grid gap-4 sm:grid-cols-3">
+              <div className="flex items-start gap-2.5">
+                <Icon name="user" className="mt-0.5 size-4 shrink-0 text-brand" />
+                <div><dt className="text-xs font-medium text-subtle">Responsável</dt><dd className="mt-1 text-sm text-strong">{projectStageResponsibleName(stage.responsible_user_id, members)}</dd></div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <Icon name="calendar" className="mt-0.5 size-4 shrink-0 text-brand" />
+                <div><dt className="text-xs font-medium text-subtle">Início planejado</dt><dd className="mt-1 text-sm text-strong">{formatProjectDate(stage.planned_start_date)}</dd></div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <Icon name="clock" className="mt-0.5 size-4 shrink-0 text-brand" />
+                <div><dt className="text-xs font-medium text-subtle">Término planejado</dt><dd className="mt-1 text-sm text-strong">{formatProjectDate(stage.planned_end_date)}</dd></div>
+              </div>
+            </dl>
+            <div className="lg:border-l lg:border-line/70 lg:pl-5">
+              <ProgressBar label={`Progresso da etapa ${stage.name}`} progress={progress} />
+            </div>
           </div>
-          {stage.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">{stage.description}</p>}
+
+          {editable && (
+            <div className="mt-4 flex flex-wrap items-start gap-2 lg:justify-end">
+              <ProjectStageStatusActions status={stage.status} action={changeStageStatus.bind(null, stage.id)} />
+              <ProjectStageReorder stageName={stage.name} canMoveUp={canMoveUp} canMoveDown={canMoveDown} action={reorderStage.bind(null, stage.id)} />
+              <ProjectStageEdit stage={stage} members={members} action={updateStage.bind(null, stage.id)} />
+              <ProjectStageArchive stageName={stage.name} action={archiveStage.bind(null, stage.id)} />
+            </div>
+          )}
         </div>
-        <StageStatusBadge status={stage.status} />
+        <ProjectStageTasks stageName={stage.name} tasks={tasks} members={members} editable={editable} createTask={createTask.bind(null, stage.id)} />
       </div>
-
-      {editable && (
-        <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-          <ProjectStageStatusActions status={stage.status} action={changeStageStatus.bind(null, stage.id)} />
-          <ProjectStageReorder stageName={stage.name} canMoveUp={canMoveUp} canMoveDown={canMoveDown} action={reorderStage.bind(null, stage.id)} />
-          <ProjectStageEdit stage={stage} members={members} action={updateStage.bind(null, stage.id)} />
-          <ProjectStageArchive stageName={stage.name} action={archiveStage.bind(null, stage.id)} />
-        </div>
-      )}
-
-      <dl className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-3">
-        <div>
-          <dt className="text-xs font-medium text-subtle">Responsável</dt>
-          <dd className="mt-1 text-sm text-strong">{projectStageResponsibleName(stage.responsible_user_id, members)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-medium text-subtle">Início planejado</dt>
-          <dd className="mt-1 text-sm text-strong">{formatProjectDate(stage.planned_start_date)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-medium text-subtle">Término planejado</dt>
-          <dd className="mt-1 text-sm text-strong">{formatProjectDate(stage.planned_end_date)}</dd>
-        </div>
-      </dl>
-
-      <div className="mt-4 rounded-xl bg-soft/60 p-3">
-        <ProgressBar label={`Progresso da etapa ${stage.name}`} progress={progress} />
-      </div>
-      <ProjectStageTasks stageName={stage.name} tasks={tasks} members={members} />
     </li>
   );
 }
@@ -137,6 +161,7 @@ export function ProjectStages({
   changeStageStatus,
   archiveStage,
   reorderStage,
+  createTask,
 }: {
   result: ProjectStagesResult;
   members: CrmMember[];
@@ -146,6 +171,7 @@ export function ProjectStages({
   changeStageStatus: (stageId: string, nextStatus: ProjectStageRecord["status"], state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   archiveStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
   reorderStage: (stageId: string, direction: "up" | "down", state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  createTask: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   const progressByStage = new Map(result.stageProgress.map((progress) => [progress.project_stage_id, progress]));
   const tasksByStage = groupProjectTasksByStage(result.tasks);
@@ -183,7 +209,7 @@ export function ProjectStages({
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">Quando o planejamento operacional for estruturado, as etapas aparecerão aqui em ordem de execução.</p>
         </div>
       ) : (
-        <ol className="mt-5 space-y-3">
+        <ol className="mt-6 space-y-6">
           {result.stages.map((stage, index) => {
             const availability = projectStageReorderAvailability(index, result.stages.length);
             return <StageCard
@@ -198,6 +224,7 @@ export function ProjectStages({
               canMoveUp={availability.canMoveUp}
               canMoveDown={availability.canMoveDown}
               tasks={tasksByStage.get(stage.id) ?? []}
+              createTask={createTask}
               progress={progressByStage.get(stage.id) ?? {
                 project_stage_id: stage.id,
                 eligible_tasks: 0,

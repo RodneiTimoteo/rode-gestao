@@ -50,6 +50,14 @@ export type ProjectStageInput = {
   planned_end_date: string | null;
 };
 
+export type ProjectTaskInput = {
+  title: string;
+  description: string | null;
+  priority: ProjectTaskPriority;
+  assigned_to: string | null;
+  due_date: string | null;
+};
+
 export type ProjectRecord = {
   id: string;
   organization_id: string;

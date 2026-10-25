@@ -51,6 +51,16 @@ function validStageUpdateForm() {
   return data;
 }
 
+function validTaskForm() {
+  const data = new FormData();
+  data.set("title", "Preparar diagnóstico");
+  data.set("description", "Consolidar os dados coletados.");
+  data.set("priority", "medium");
+  data.set("assigned_to", uuid("2"));
+  data.set("due_date", "2026-11-05");
+  return data;
+}
+
 function archiveStageForm() {
   const data = new FormData();
   data.set("confirmation", "archive-project-stage");
@@ -687,6 +697,140 @@ describe("Server Actions de projetos com Supabase mockado", () => {
       const failed = stageSupabase(options);
       currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: failed.client };
       const result = await reorderProjectStagesAction(uuid("9"), uuid("3"), "down", { status: "idle", message: "" }, new FormData());
+      assert.equal(result.status, "error");
+      assert.equal(result.message.includes("private"), false);
+      assert.deepEqual(revalidated, []);
+    }
+  });
+
+  it("cria tarefa pela RPC após validar projeto, etapa e responsável na organização", async () => {
+    const supabase = stageSupabase({ rpcData: uuid("6") });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+    const { createProjectTaskAction } = await import("./actions.ts");
+    const form = validTaskForm();
+    form.set("organization_id", uuid("1"));
+    const result = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, form);
+
+    assert.deepEqual(result, { status: "success", message: "Tarefa criada com sucesso." });
+    assert.deepEqual(supabase.rpcCalls, [["create_project_task", {
+      target_stage_id: uuid("4"),
+      target_title: "Preparar diagnóstico",
+      target_description: "Consolidar os dados coletados.",
+      target_priority: "medium",
+      target_assigned_to: uuid("2"),
+      target_due_date: "2026-11-05",
+    }]]);
+    assert.deepEqual(supabase.fromCalls, [
+      { table: "projects", filters: { organization_id: uuid("8"), id: uuid("9") } },
+      { table: "project_stages", filters: { organization_id: uuid("8"), project_id: uuid("9"), id: uuid("4") } },
+      { table: "organization_members", filters: { organization_id: uuid("8"), user_id: uuid("2"), status: "active" } },
+    ]);
+    assert.equal(supabase.fromCalls.some((call) => call.table === "project_events"), false);
+    assert.deepEqual(revalidated, ["/projetos", `/projetos/${uuid("9")}`]);
+  });
+
+  it("cria tarefa sem campos opcionais e mantém a prioridade média enviada pelo formulário", async () => {
+    const supabase = stageSupabase({ rpcData: uuid("6") });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+    const { createProjectTaskAction } = await import("./actions.ts");
+    const form = validTaskForm();
+    form.set("description", "");
+    form.set("assigned_to", "");
+    form.set("due_date", "");
+    const result = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, form);
+    assert.equal(result.status, "success");
+    assert.deepEqual(supabase.rpcCalls[0]?.[1], {
+      target_stage_id: uuid("4"), target_title: "Preparar diagnóstico", target_description: null,
+      target_priority: "medium", target_assigned_to: null, target_due_date: null,
+    });
+    assert.equal(supabase.fromCalls.some((call) => call.table === "organization_members"), false);
+  });
+
+  it("rejeita dados inválidos da tarefa antes de consultar ou escrever", async () => {
+    const supabase = stageSupabase();
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+    const { createProjectTaskAction } = await import("./actions.ts");
+    const form = validTaskForm();
+    form.set("title", " ");
+    form.set("description", "D".repeat(8001));
+    form.set("priority", "critical");
+    form.set("assigned_to", "invalid");
+    form.set("due_date", "2026-02-31");
+    const result = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, form);
+    assert.deepEqual(Object.keys(result.fieldErrors ?? {}).sort(), ["assigned_to", "description", "due_date", "priority", "title"]);
+    assert.deepEqual(supabase.fromCalls, []);
+    assert.deepEqual(supabase.rpcCalls, []);
+  });
+
+  it("rejeita projeto ou etapa com identificador inválido", async () => {
+    const { createProjectTaskAction } = await import("./actions.ts");
+    for (const [projectId, stageId, expected] of [["invalid", uuid("4"), /Projeto inválido/], [uuid("9"), "invalid", /Etapa inválida/]] as const) {
+      const supabase = stageSupabase();
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+      const result = await createProjectTaskAction(projectId, stageId, { status: "idle", message: "" }, validTaskForm());
+      assert.match(result.message, expected);
+      assert.deepEqual(supabase.fromCalls, []);
+      assert.deepEqual(supabase.rpcCalls, []);
+    }
+  });
+
+  it("bloqueia etapa inexistente, externa ou arquivada", async () => {
+    const { createProjectTaskAction } = await import("./actions.ts");
+    const missing = stageSupabase({ stage: null });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: missing.client };
+    const missingResult = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, validTaskForm());
+    assert.match(missingResult.message, /não encontrada/);
+    assert.deepEqual(missing.fromCalls.at(-1), { table: "project_stages", filters: { organization_id: uuid("8"), project_id: uuid("9"), id: uuid("4") } });
+    assert.deepEqual(missing.rpcCalls, []);
+
+    const archived = stageSupabase({ stage: { id: uuid("4"), status: "completed", archived_at: "2026-10-25T15:00:00Z", updated_at: "2026-10-25T15:00:00Z" } });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: archived.client };
+    const archivedResult = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, validTaskForm());
+    assert.match(archivedResult.message, /arquivadas/);
+    assert.deepEqual(archived.rpcCalls, []);
+  });
+
+  it("bloqueia projeto externo, concluído ou cancelado", async () => {
+    const { createProjectTaskAction } = await import("./actions.ts");
+    const external = stageSupabase({ project: null });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: external.client };
+    const externalResult = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, validTaskForm());
+    assert.match(externalResult.message, /não encontrado nesta organização/);
+    assert.deepEqual(external.rpcCalls, []);
+
+    for (const status of ["completed", "cancelled"]) {
+      const terminal = stageSupabase({ project: { id: uuid("9"), status } });
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: terminal.client };
+      const result = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, validTaskForm());
+      assert.match(result.message, /concluídos ou cancelados/);
+      assert.deepEqual(terminal.rpcCalls, []);
+    }
+  });
+
+  it("rejeita responsável inativo ou externo", async () => {
+    const supabase = stageSupabase({ member: null });
+    currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: supabase.client };
+    const { createProjectTaskAction } = await import("./actions.ts");
+    const result = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, validTaskForm());
+    assert.equal(result.fieldErrors?.assigned_to, "Responsável inválido ou inativo.");
+    assert.deepEqual(supabase.rpcCalls, []);
+  });
+
+  it("exige autenticação, sanitiza falha da RPC e rejeita retorno inválido", async () => {
+    const { createProjectTaskAction } = await import("./actions.ts");
+    currentContext = { status: "unauthenticated", supabase: {} };
+    await assert.rejects(
+      () => createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, validTaskForm()),
+      (error: unknown) => error instanceof RedirectSignal && error.location === "/login",
+    );
+
+    for (const options of [
+      { rpcError: { code: "XX000", message: "private task detail" }, rpcData: uuid("6") },
+      { rpcError: null, rpcData: "invalid" },
+    ]) {
+      const failed = stageSupabase(options);
+      currentContext = { status: "ready", user: { id: uuid("7") }, organization: { id: uuid("8"), role: "member" }, supabase: failed.client };
+      const result = await createProjectTaskAction(uuid("9"), uuid("4"), { status: "idle", message: "" }, validTaskForm());
       assert.equal(result.status, "error");
       assert.equal(result.message.includes("private"), false);
       assert.deepEqual(revalidated, []);

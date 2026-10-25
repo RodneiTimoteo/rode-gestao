@@ -63,6 +63,8 @@ export const projectTaskPriorityLabels: Record<ProjectTaskPriority, string> = {
   urgent: "Urgente",
 };
 
+export const projectTaskDefaultPriority: ProjectTaskPriority = "medium";
+
 export const projectTaskPriorityStyles: Record<ProjectTaskPriority, string> = {
   low: "bg-soft text-muted",
   medium: "bg-brand-soft text-brand",

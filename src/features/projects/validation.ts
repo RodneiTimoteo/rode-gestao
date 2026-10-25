@@ -1,5 +1,5 @@
 import { isUuid, parseCurrency } from "../crm/validation.ts";
-import type { ManualProjectInput, ProjectStageInput, ProjectStatus, ProposalProjectInput } from "./types.ts";
+import type { ManualProjectInput, ProjectStageInput, ProjectStatus, ProjectTaskInput, ProjectTaskPriority, ProposalProjectInput } from "./types.ts";
 
 function stringValue(formData: FormData, key: string, max: number) {
   return String(formData.get(key) ?? "").trim().slice(0, max);
@@ -90,6 +90,38 @@ export function parseProjectStageInput(formData: FormData):
       responsible_user_id: optional(responsibleUserId),
       planned_start_date: optional(plannedStartDate),
       planned_end_date: optional(plannedEndDate),
+    },
+  };
+}
+
+export function parseProjectTaskInput(formData: FormData):
+  | { success: true; data: ProjectTaskInput }
+  | { success: false; message: string; fieldErrors: Record<string, string> } {
+  const fieldErrors: Record<string, string> = {};
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const priority = String(formData.get("priority") ?? "").trim();
+  const assignedTo = String(formData.get("assigned_to") ?? "").trim();
+  const dueDate = String(formData.get("due_date") ?? "").trim();
+  const priorities: ProjectTaskPriority[] = ["low", "medium", "high", "urgent"];
+
+  if (!title || title.length > 300) fieldErrors.title = "Informe um título entre 1 e 300 caracteres.";
+  if (description.length > 8000) fieldErrors.description = "A descrição deve ter no máximo 8.000 caracteres.";
+  if (!priorities.includes(priority as ProjectTaskPriority)) fieldErrors.priority = "Selecione uma prioridade válida.";
+  if (assignedTo && !isUuid(assignedTo)) fieldErrors.assigned_to = "Selecione um responsável válido.";
+  if (dueDate && !isValidDate(dueDate)) fieldErrors.due_date = "Informe uma data válida.";
+
+  if (Object.keys(fieldErrors).length) {
+    return { success: false, message: "Revise os campos destacados.", fieldErrors };
+  }
+  return {
+    success: true,
+    data: {
+      title,
+      description: optional(description),
+      priority: priority as ProjectTaskPriority,
+      assigned_to: optional(assignedTo),
+      due_date: optional(dueDate),
     },
   };
 }

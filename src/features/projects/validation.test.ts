@@ -4,6 +4,7 @@ import {
   canTransitionProject,
   parseManualProjectInput,
   parseProjectStageInput,
+  parseProjectTaskInput,
   parseProposalProjectInput,
   validateDeadlineChange,
   validateStatusJustification,
@@ -133,4 +134,57 @@ test("rejeita responsável, datas e intervalo planejado inválidos", () => {
   const reversed = parseProjectStageInput(form);
   assert.equal(reversed.success, false);
   if (!reversed.success) assert.match(reversed.fieldErrors.planned_end_date, /anterior/);
+});
+
+test("normaliza os dados válidos de uma nova tarefa", () => {
+  const form = new FormData();
+  form.set("title", "  Preparar diagnóstico  ");
+  form.set("description", "  Consolidar os dados coletados.  ");
+  form.set("priority", "medium");
+  form.set("assigned_to", memberId);
+  form.set("due_date", "2026-11-05");
+  const result = parseProjectTaskInput(form);
+  assert.equal(result.success, true);
+  if (result.success) assert.deepEqual(result.data, {
+    title: "Preparar diagnóstico",
+    description: "Consolidar os dados coletados.",
+    priority: "medium",
+    assigned_to: memberId,
+    due_date: "2026-11-05",
+  });
+});
+
+test("rejeita título, descrição e prioridade inválidos em tarefas", () => {
+  const form = new FormData();
+  form.set("title", " ");
+  form.set("description", "D".repeat(8001));
+  const missing = parseProjectTaskInput(form);
+  assert.equal(missing.success, false);
+  if (!missing.success) assert.deepEqual(Object.keys(missing.fieldErrors).sort(), ["description", "priority", "title"]);
+
+  form.set("title", "T".repeat(301));
+  form.set("description", "");
+  form.set("priority", "critical");
+  const invalid = parseProjectTaskInput(form);
+  assert.equal(invalid.success, false);
+  if (!invalid.success) assert.deepEqual(Object.keys(invalid.fieldErrors).sort(), ["priority", "title"]);
+});
+
+test("rejeita responsável e prazo inválidos e aceita campos opcionais vazios", () => {
+  const form = new FormData();
+  form.set("title", "Agendar reunião");
+  form.set("priority", "low");
+  form.set("assigned_to", "membro-externo");
+  form.set("due_date", "2026-02-31");
+  const invalid = parseProjectTaskInput(form);
+  assert.equal(invalid.success, false);
+  if (!invalid.success) assert.deepEqual(Object.keys(invalid.fieldErrors).sort(), ["assigned_to", "due_date"]);
+
+  form.set("assigned_to", "");
+  form.set("due_date", "");
+  const optional = parseProjectTaskInput(form);
+  assert.equal(optional.success, true);
+  if (optional.success) assert.deepEqual(optional.data, {
+    title: "Agendar reunião", description: null, priority: "low", assigned_to: null, due_date: null,
+  });
 });

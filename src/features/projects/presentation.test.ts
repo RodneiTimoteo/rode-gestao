@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { projectEventLabels, projectStageStatusLabels, projectTaskPriorityLabels, projectTaskStatusLabels } from "./constants.ts";
+import { projectEventLabels, projectStageStatusLabels, projectTaskDefaultPriority, projectTaskPriorityLabels, projectTaskStatusLabels } from "./constants.ts";
 import { formatProjectDate } from "./format.ts";
 import {
   getProjectDeadlineEventDetails,
@@ -113,6 +113,7 @@ test("apresenta todas as situações e prioridades de tarefa", () => {
     todo: "A fazer", in_progress: "Em andamento", blocked: "Bloqueada", done: "Concluída", cancelled: "Cancelada",
   });
   assert.deepEqual(projectTaskPriorityLabels, { low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" });
+  assert.equal(projectTaskDefaultPriority, "medium");
 });
 
 test("normaliza progresso e descreve as quantidades de tarefas", () => {

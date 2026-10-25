@@ -11,6 +11,7 @@ import {
   canTransitionProject,
   parseManualProjectInput,
   parseProjectStageInput,
+  parseProjectTaskInput,
   parseProposalProjectInput,
   validateDeadlineChange,
   validateStatusJustification,
@@ -33,6 +34,11 @@ function databaseMessage(error: PostgrestError) {
   if (error.message.includes("stage not found")) return "Etapa não encontrada ou sem acesso.";
   if (error.message.includes("pending tasks")) return "Conclua ou cancele todas as tarefas da etapa antes de arquivá-la.";
   if (error.message.includes("ordered stages")) return "A ordem das etapas mudou. Atualize a página e tente novamente.";
+  if (error.message.includes("task title")) return "Informe um título válido para a tarefa.";
+  if (error.message.includes("task description")) return "A descrição da tarefa é muito longa.";
+  if (error.message.includes("task priority")) return "Selecione uma prioridade válida para a tarefa.";
+  if (error.message.includes("task assignee")) return "O responsável deve ser um membro ativo desta organização.";
+  if (error.message.includes("task position limit")) return "A etapa atingiu o limite de tarefas ordenadas.";
   if (error.message.includes("deadline")) return "Revise o prazo e a justificativa informados.";
   return "Não foi possível concluir a operação agora. Tente novamente.";
 }
@@ -193,6 +199,72 @@ export async function createProjectStageAction(projectId: string, _state: Projec
   revalidatePath("/projetos");
   revalidatePath(`/projetos/${projectId}`);
   return { status: "success", message: "Etapa criada com sucesso." };
+}
+
+export async function createProjectTaskAction(projectId: string, stageId: string, _state: ProjectActionState, formData: FormData): Promise<ProjectActionState> {
+  const auth = await projectContext();
+  if (!auth.ok) return auth.state;
+  if (!isUuid(projectId)) return { status: "error", message: "Projeto inválido." };
+  if (!isUuid(stageId)) return { status: "error", message: "Etapa inválida." };
+
+  const parsed = parseProjectTaskInput(formData);
+  if (!parsed.success) return { status: "error", message: parsed.message, fieldErrors: parsed.fieldErrors };
+
+  const { data: project, error: projectError } = await auth.context.supabase
+    .from("projects")
+    .select("id, status")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError) return { status: "error", message: "Não foi possível validar o projeto agora. Tente novamente." };
+  if (!project) return { status: "error", message: "Projeto não encontrado nesta organização." };
+  if (project.status === "completed" || project.status === "cancelled") {
+    return { status: "error", message: "Projetos concluídos ou cancelados não permitem novas tarefas." };
+  }
+
+  const { data: stage, error: stageError } = await auth.context.supabase
+    .from("project_stages")
+    .select("id, archived_at")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("project_id", projectId)
+    .eq("id", stageId)
+    .maybeSingle();
+  if (stageError) return { status: "error", message: "Não foi possível validar a etapa agora. Tente novamente." };
+  if (!stage) return { status: "error", message: "Etapa não encontrada neste projeto." };
+  if (stage.archived_at) return { status: "error", message: "Etapas arquivadas não permitem novas tarefas." };
+
+  if (parsed.data.assigned_to) {
+    const { data: membership, error: membershipError } = await auth.context.supabase
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", auth.context.organization.id)
+      .eq("user_id", parsed.data.assigned_to)
+      .eq("status", "active")
+      .maybeSingle();
+    if (membershipError) return { status: "error", message: "Não foi possível validar o responsável agora. Tente novamente." };
+    if (!membership) {
+      return {
+        status: "error",
+        message: "Selecione um responsável ativo desta organização.",
+        fieldErrors: { assigned_to: "Responsável inválido ou inativo." },
+      };
+    }
+  }
+
+  const { data, error } = await auth.context.supabase.rpc("create_project_task", {
+    target_stage_id: stageId,
+    target_title: parsed.data.title,
+    target_description: parsed.data.description,
+    target_priority: parsed.data.priority,
+    target_assigned_to: parsed.data.assigned_to,
+    target_due_date: parsed.data.due_date,
+  });
+  if (error) return { status: "error", message: databaseMessage(error) };
+  if (!isUuid(String(data))) return { status: "error", message: "O banco não retornou uma tarefa válida." };
+
+  revalidatePath("/projetos");
+  revalidatePath(`/projetos/${projectId}`);
+  return { status: "success", message: "Tarefa criada com sucesso." };
 }
 
 export async function updateProjectStageAction(projectId: string, stageId: string, _state: ProjectActionState, formData: FormData): Promise<ProjectActionState> {
