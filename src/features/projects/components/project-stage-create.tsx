@@ -2,8 +2,9 @@
 
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import { Field, FormMessage, inputClassName, textareaClassName } from "@/features/crm/components/form-controls";
+import { FormMessage } from "@/features/crm/components/form-controls";
 import type { CrmMember } from "@/features/crm/types";
+import { ProjectStageFields } from "@/features/projects/components/project-stage-fields";
 import type { ProjectActionState } from "@/features/projects/types";
 import { initialProjectActionState } from "@/features/projects/types";
 
@@ -24,27 +25,8 @@ function StageCreateForm({ action, members, onCancel }: { action: CreateStageAct
         <p className="mt-1 text-xs leading-5 text-muted">A etapa será adicionada ao final da ordem atual.</p>
       </div>
       <FormMessage status={state.status} message={state.message} />
-      <div className={`${state.message ? "mt-4 " : ""}grid gap-4 md:grid-cols-2`}>
-        <Field label="Nome da etapa *" htmlFor="stage_name" error={state.fieldErrors?.name}>
-          <input autoFocus className={inputClassName} id="stage_name" name="name" required minLength={1} maxLength={200} />
-        </Field>
-        <Field label="Responsável" htmlFor="stage_responsible_user_id" error={state.fieldErrors?.responsible_user_id}>
-          <select className={inputClassName} id="stage_responsible_user_id" name="responsible_user_id" defaultValue="">
-            <option value="">Não atribuído</option>
-            {members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName}</option>)}
-          </select>
-        </Field>
-        <div className="md:col-span-2">
-          <Field label="Descrição" htmlFor="stage_description" error={state.fieldErrors?.description} hint="Opcional. Até 8.000 caracteres.">
-            <textarea className={`${textareaClassName} min-h-24`} id="stage_description" name="description" maxLength={8000} placeholder="Descreva o objetivo e as entregas desta etapa." />
-          </Field>
-        </div>
-        <Field label="Data inicial planejada" htmlFor="stage_planned_start_date" error={state.fieldErrors?.planned_start_date}>
-          <input className={inputClassName} id="stage_planned_start_date" name="planned_start_date" type="date" />
-        </Field>
-        <Field label="Data final planejada" htmlFor="stage_planned_end_date" error={state.fieldErrors?.planned_end_date}>
-          <input className={inputClassName} id="stage_planned_end_date" name="planned_end_date" type="date" />
-        </Field>
+      <div className={state.message ? "mt-4" : undefined}>
+        <ProjectStageFields idPrefix="stage-create" members={members} fieldErrors={state.fieldErrors} autoFocusName />
       </div>
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button type="button" disabled={pending} onClick={onCancel} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-muted outline-none hover:text-strong focus-visible:ring-4 focus-visible:ring-brand-soft disabled:opacity-60">

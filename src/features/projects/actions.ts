@@ -27,6 +27,8 @@ function databaseMessage(error: PostgrestError) {
   if (error.message.includes("stage description")) return "A descrição da etapa é muito longa.";
   if (error.message.includes("stage deadline")) return "A data final não pode ser anterior à data inicial.";
   if (error.message.includes("stage responsible")) return "O responsável deve ser um membro ativo desta organização.";
+  if (error.message.includes("archived stages")) return "Etapas arquivadas não podem ser editadas.";
+  if (error.message.includes("stage not found")) return "Etapa não encontrada ou sem acesso.";
   if (error.message.includes("deadline")) return "Revise o prazo e a justificativa informados.";
   return "Não foi possível concluir a operação agora. Tente novamente.";
 }
@@ -187,4 +189,76 @@ export async function createProjectStageAction(projectId: string, _state: Projec
   revalidatePath("/projetos");
   revalidatePath(`/projetos/${projectId}`);
   return { status: "success", message: "Etapa criada com sucesso." };
+}
+
+export async function updateProjectStageAction(projectId: string, stageId: string, _state: ProjectActionState, formData: FormData): Promise<ProjectActionState> {
+  const auth = await projectContext();
+  if (!auth.ok) return auth.state;
+  if (!isUuid(projectId)) return { status: "error", message: "Projeto inválido." };
+  if (!isUuid(stageId)) return { status: "error", message: "Etapa inválida." };
+
+  const parsed = parseProjectStageInput(formData);
+  if (!parsed.success) return { status: "error", message: parsed.message, fieldErrors: parsed.fieldErrors };
+  const expectedUpdatedAt = String(formData.get("expected_updated_at") ?? "").trim();
+  if (!expectedUpdatedAt) return { status: "error", message: "Reabra a edição para carregar os dados atuais da etapa." };
+
+  const { data: project, error: projectError } = await auth.context.supabase
+    .from("projects")
+    .select("id, status")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError) return { status: "error", message: "Não foi possível validar o projeto agora. Tente novamente." };
+  if (!project) return { status: "error", message: "Projeto não encontrado nesta organização." };
+  if (project.status === "completed" || project.status === "cancelled") {
+    return { status: "error", message: "Projetos concluídos ou cancelados não permitem editar etapas." };
+  }
+
+  if (parsed.data.responsible_user_id) {
+    const { data: membership, error: membershipError } = await auth.context.supabase
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", auth.context.organization.id)
+      .eq("user_id", parsed.data.responsible_user_id)
+      .eq("status", "active")
+      .maybeSingle();
+    if (membershipError) return { status: "error", message: "Não foi possível validar o responsável agora. Tente novamente." };
+    if (!membership) {
+      return {
+        status: "error",
+        message: "Selecione um responsável ativo desta organização.",
+        fieldErrors: { responsible_user_id: "Responsável inválido ou inativo." },
+      };
+    }
+  }
+
+  const { data: stage, error: stageError } = await auth.context.supabase
+    .from("project_stages")
+    .select("id, status, archived_at, updated_at")
+    .eq("organization_id", auth.context.organization.id)
+    .eq("project_id", projectId)
+    .eq("id", stageId)
+    .maybeSingle();
+  if (stageError) return { status: "error", message: "Não foi possível validar a etapa agora. Tente novamente." };
+  if (!stage) return { status: "error", message: "Etapa não encontrada neste projeto." };
+  if (stage.archived_at) return { status: "error", message: "Etapas arquivadas não podem ser editadas." };
+  if (stage.updated_at !== expectedUpdatedAt) {
+    return { status: "error", message: "Esta etapa foi alterada por outra operação. Reabra a edição para usar os dados atuais." };
+  }
+
+  const { data, error } = await auth.context.supabase.rpc("update_project_stage", {
+    target_stage_id: stageId,
+    target_name: parsed.data.name,
+    target_description: parsed.data.description,
+    target_status: stage.status,
+    target_responsible_user_id: parsed.data.responsible_user_id,
+    target_planned_start_date: parsed.data.planned_start_date,
+    target_planned_end_date: parsed.data.planned_end_date,
+  });
+  if (error) return { status: "error", message: databaseMessage(error) };
+  if (String(data) !== stageId) return { status: "error", message: "O banco não retornou uma etapa válida." };
+
+  revalidatePath("/projetos");
+  revalidatePath(`/projetos/${projectId}`);
+  return { status: "success", message: "Etapa atualizada com sucesso." };
 }

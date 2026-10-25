@@ -2,6 +2,7 @@ import { Icon } from "@/components/ui/icon";
 import type { CrmMember } from "@/features/crm/types";
 import { projectStageStatusLabels, projectStageStatusStyles } from "@/features/projects/constants";
 import { ProjectStageCreate } from "@/features/projects/components/project-stage-create";
+import { ProjectStageEdit } from "@/features/projects/components/project-stage-edit";
 import { formatProjectDate } from "@/features/projects/format";
 import {
   isTerminalProjectStatus,
@@ -53,10 +54,14 @@ function StageCard({
   stage,
   progress,
   members,
+  editable,
+  updateStage,
 }: {
   stage: ProjectStageRecord;
   progress: ProjectStageProgress;
   members: CrmMember[];
+  editable: boolean;
+  updateStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   return (
     <li className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -72,6 +77,8 @@ function StageCard({
         </div>
         <StageStatusBadge status={stage.status} />
       </div>
+
+      {editable && <div className="mt-3 flex justify-end"><ProjectStageEdit stage={stage} members={members} action={updateStage.bind(null, stage.id)} /></div>}
 
       <dl className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-3">
         <div>
@@ -100,11 +107,13 @@ export function ProjectStages({
   members,
   projectStatus,
   createStage,
+  updateStage,
 }: {
   result: ProjectStagesResult;
   members: CrmMember[];
   projectStatus: ProjectStatus;
   createStage: (state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
+  updateStage: (stageId: string, state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   const progressByStage = new Map(result.stageProgress.map((progress) => [progress.project_stage_id, progress]));
   const terminal = isTerminalProjectStatus(projectStatus);
@@ -147,6 +156,8 @@ export function ProjectStages({
               key={stage.id}
               stage={stage}
               members={members}
+              editable={!terminal}
+              updateStage={updateStage}
               progress={progressByStage.get(stage.id) ?? {
                 project_stage_id: stage.id,
                 eligible_tasks: 0,
