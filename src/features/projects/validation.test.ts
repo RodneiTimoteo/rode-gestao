@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   canTransitionProject,
   parseManualProjectInput,
+  parseProjectStageInput,
   parseProposalProjectInput,
   validateDeadlineChange,
   validateStatusJustification,
@@ -81,4 +82,55 @@ test("exige motivo para pausa, espera do cliente e qualquer alteração de prazo
   assert.deepEqual(validateDeadlineChange("2026-12-20", ""), { justification: "A justificativa é obrigatória." });
   assert.deepEqual(validateDeadlineChange("inválida", "Motivo"), { expected_end_date: "Informe uma nova data válida." });
   assert.equal(validateDeadlineChange("2026-12-20", "Pedido formal do cliente"), null);
+});
+
+test("normaliza os dados válidos de uma nova etapa", () => {
+  const form = new FormData();
+  form.set("name", "  Descoberta  ");
+  form.set("description", "  Levantamento inicial  ");
+  form.set("responsible_user_id", memberId);
+  form.set("planned_start_date", "2026-10-25");
+  form.set("planned_end_date", "2026-10-31");
+  const result = parseProjectStageInput(form);
+  assert.equal(result.success, true);
+  if (result.success) assert.deepEqual(result.data, {
+    name: "Descoberta",
+    description: "Levantamento inicial",
+    responsible_user_id: memberId,
+    planned_start_date: "2026-10-25",
+    planned_end_date: "2026-10-31",
+  });
+});
+
+test("rejeita nome ausente ou maior que 200 caracteres e descrição acima do limite", () => {
+  const empty = new FormData();
+  empty.set("name", "   ");
+  const emptyResult = parseProjectStageInput(empty);
+  assert.equal(emptyResult.success, false);
+  if (!emptyResult.success) assert.match(emptyResult.fieldErrors.name, /1 e 200/);
+
+  const long = new FormData();
+  long.set("name", "A".repeat(201));
+  long.set("description", "B".repeat(8001));
+  const longResult = parseProjectStageInput(long);
+  assert.equal(longResult.success, false);
+  if (!longResult.success) assert.deepEqual(Object.keys(longResult.fieldErrors).sort(), ["description", "name"]);
+});
+
+test("rejeita responsável, datas e intervalo planejado inválidos", () => {
+  const form = new FormData();
+  form.set("name", "Execução");
+  form.set("responsible_user_id", "membro-externo");
+  form.set("planned_start_date", "2026-02-31");
+  form.set("planned_end_date", "data-inválida");
+  const invalid = parseProjectStageInput(form);
+  assert.equal(invalid.success, false);
+  if (!invalid.success) assert.deepEqual(Object.keys(invalid.fieldErrors).sort(), ["planned_end_date", "planned_start_date", "responsible_user_id"]);
+
+  form.set("responsible_user_id", "");
+  form.set("planned_start_date", "2026-11-02");
+  form.set("planned_end_date", "2026-11-01");
+  const reversed = parseProjectStageInput(form);
+  assert.equal(reversed.success, false);
+  if (!reversed.success) assert.match(reversed.fieldErrors.planned_end_date, /anterior/);
 });

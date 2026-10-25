@@ -1,5 +1,5 @@
 import { isUuid, parseCurrency } from "../crm/validation.ts";
-import type { ManualProjectInput, ProjectStatus, ProposalProjectInput } from "./types.ts";
+import type { ManualProjectInput, ProjectStageInput, ProjectStatus, ProposalProjectInput } from "./types.ts";
 
 function stringValue(formData: FormData, key: string, max: number) {
   return String(formData.get(key) ?? "").trim().slice(0, max);
@@ -58,6 +58,40 @@ export function parseProposalProjectInput(proposalId: string, formData: FormData
   if (!isUuid(proposalId)) parsed.fieldErrors.proposal_id = "Selecione uma proposta aprovada válida.";
   if (Object.keys(parsed.fieldErrors).length) return { success: false, message: "Revise os campos destacados.", fieldErrors: parsed.fieldErrors };
   return { success: true, data: { ...parsed.data, proposal_id: proposalId } };
+}
+
+export function parseProjectStageInput(formData: FormData):
+  | { success: true; data: ProjectStageInput }
+  | { success: false; message: string; fieldErrors: Record<string, string> } {
+  const fieldErrors: Record<string, string> = {};
+  const name = String(formData.get("name") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const responsibleUserId = String(formData.get("responsible_user_id") ?? "").trim();
+  const plannedStartDate = String(formData.get("planned_start_date") ?? "").trim();
+  const plannedEndDate = String(formData.get("planned_end_date") ?? "").trim();
+
+  if (!name || name.length > 200) fieldErrors.name = "Informe um nome entre 1 e 200 caracteres.";
+  if (description.length > 8000) fieldErrors.description = "A descrição deve ter no máximo 8.000 caracteres.";
+  if (responsibleUserId && !isUuid(responsibleUserId)) fieldErrors.responsible_user_id = "Selecione um responsável válido.";
+  if (plannedStartDate && !isValidDate(plannedStartDate)) fieldErrors.planned_start_date = "Informe uma data válida.";
+  if (plannedEndDate && !isValidDate(plannedEndDate)) fieldErrors.planned_end_date = "Informe uma data válida.";
+  if (plannedStartDate && plannedEndDate && plannedEndDate < plannedStartDate) {
+    fieldErrors.planned_end_date = "A data final não pode ser anterior à data inicial.";
+  }
+
+  if (Object.keys(fieldErrors).length) {
+    return { success: false, message: "Revise os campos destacados.", fieldErrors };
+  }
+  return {
+    success: true,
+    data: {
+      name,
+      description: optional(description),
+      responsible_user_id: optional(responsibleUserId),
+      planned_start_date: optional(plannedStartDate),
+      planned_end_date: optional(plannedEndDate),
+    },
+  };
 }
 
 export function canTransitionProject(from: ProjectStatus, to: ProjectStatus) {

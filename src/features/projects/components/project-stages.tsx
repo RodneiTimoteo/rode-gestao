@@ -1,6 +1,7 @@
 import { Icon } from "@/components/ui/icon";
 import type { CrmMember } from "@/features/crm/types";
 import { projectStageStatusLabels, projectStageStatusStyles } from "@/features/projects/constants";
+import { ProjectStageCreate } from "@/features/projects/components/project-stage-create";
 import { formatProjectDate } from "@/features/projects/format";
 import {
   isTerminalProjectStatus,
@@ -11,6 +12,7 @@ import {
 } from "@/features/projects/presentation";
 import type {
   ProjectProgress,
+  ProjectActionState,
   ProjectStageProgress,
   ProjectStageRecord,
   ProjectStagesResult,
@@ -58,7 +60,7 @@ function StageCard({
 }) {
   return (
     <li className="rounded-xl border border-line bg-surface p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-xs font-semibold text-brand" aria-label={`Posição ${stage.position}`}>
@@ -97,10 +99,12 @@ export function ProjectStages({
   result,
   members,
   projectStatus,
+  createStage,
 }: {
   result: ProjectStagesResult;
   members: CrmMember[];
   projectStatus: ProjectStatus;
+  createStage: (state: ProjectActionState, formData: FormData) => Promise<ProjectActionState>;
 }) {
   const progressByStage = new Map(result.stageProgress.map((progress) => [progress.project_stage_id, progress]));
   const terminal = isTerminalProjectStatus(projectStatus);
@@ -113,11 +117,11 @@ export function ProjectStages({
           <h2 id="project-stages-heading" className="text-base font-semibold text-strong">Etapas do projeto</h2>
           <p className="mt-1 text-sm text-muted">Acompanhe planejamento, responsáveis e execução em ordem operacional.</p>
         </div>
-        {terminal && (
+        {terminal ? (
           <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-soft px-3 py-1 text-xs font-semibold text-muted">
             <Icon name="lock" className="size-3.5" /> Somente leitura
           </span>
-        )}
+        ) : <ProjectStageCreate action={createStage} members={members} />}
       </div>
 
       <div className="mt-5 rounded-xl border border-line bg-soft/35 p-4">
@@ -129,8 +133,8 @@ export function ProjectStages({
       </div>
 
       {empty ? (
-        <div className="mt-5 rounded-xl border border-dashed border-line bg-soft/20 px-5 py-10 text-center">
-          <div className="mx-auto grid size-11 place-items-center rounded-xl bg-brand-soft text-brand">
+        <div className="mt-5 rounded-xl border border-dashed border-line bg-soft/20 px-5 py-8 text-center">
+          <div className="mx-auto grid size-10 place-items-center rounded-xl bg-brand-soft text-brand">
             <Icon name="list" className="size-5" />
           </div>
           <h3 className="mt-4 text-sm font-semibold text-strong">Nenhuma etapa cadastrada</h3>

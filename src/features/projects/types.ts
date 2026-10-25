@@ -31,6 +31,14 @@ export type ProjectActionState = {
 
 export const initialProjectActionState: ProjectActionState = { status: "idle", message: "" };
 
+export type ProjectStageInput = {
+  name: string;
+  description: string | null;
+  responsible_user_id: string | null;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
+};
+
 export type ProjectRecord = {
   id: string;
   organization_id: string;
